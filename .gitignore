@@ -1,1 +1,38 @@
+# Polaris workflow state
 .polaris-setup-progress.json
+.polaris/
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+.turbo/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# AIC provisioning outputs — keep the folder via .gitkeep only
+config/aic/outputs/**
+!config/aic/outputs/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
