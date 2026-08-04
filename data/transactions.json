@@ -1,0 +1,104 @@
+[
+  {
+    "id": "txn_00001",
+    "userId": "user_ada",
+    "merchantId": "mrch_northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 1299.0,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-06-14T15:22:31Z",
+    "items": [{ "sku": "NW-LP-14-SILVER", "quantity": 1, "unitPrice": 1299.0 }],
+    "consent": { "source": "web-checkout", "confirmedAt": "2026-06-14T15:22:15Z" }
+  },
+  {
+    "id": "txn_00002",
+    "userId": "user_ada",
+    "merchantId": "mrch_northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 428.0,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-07-02T19:04:11Z",
+    "items": [
+      { "sku": "NW-HP-STUDIO", "quantity": 1, "unitPrice": 349.0 },
+      { "sku": "NW-GM-CTRL", "quantity": 1, "unitPrice": 79.0 }
+    ],
+    "consent": { "source": "chatbot", "confirmedAt": "2026-07-02T19:03:52Z" }
+  },
+  {
+    "id": "txn_00003",
+    "userId": "user_grace",
+    "merchantId": "mrch_northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 799.0,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-07-18T12:41:07Z",
+    "items": [{ "sku": "NW-PH-X7", "quantity": 1, "unitPrice": 799.0 }],
+    "consent": { "source": "chatbot", "confirmedAt": "2026-07-18T12:40:55Z" }
+  },
+  {
+    "id": "txn_00004",
+    "userId": "user_grace",
+    "merchantId": "mrch_northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 89.0,
+    "currency": "USD",
+    "status": "refunded",
+    "createdAt": "2026-07-24T09:15:44Z",
+    "items": [{ "sku": "NW-HM-KETTLE", "quantity": 1, "unitPrice": 89.0 }],
+    "consent": { "source": "web-checkout", "confirmedAt": "2026-07-24T09:15:20Z" }
+  },
+  {
+    "id": "txn_00005",
+    "userId": "user_alan",
+    "merchantId": "mrch_contoso",
+    "merchantName": "Contoso Goods",
+    "amount": 999.0,
+    "currency": "USD",
+    "status": "authorized",
+    "createdAt": "2026-07-29T17:52:03Z",
+    "items": [{ "sku": "CG-LP-13-AIR", "quantity": 1, "unitPrice": 999.0 }],
+    "consent": { "source": "chatbot", "confirmedAt": "2026-07-29T17:51:41Z" }
+  },
+  {
+    "id": "txn_00006",
+    "userId": "user_alan",
+    "merchantId": "mrch_contoso",
+    "merchantName": "Contoso Goods",
+    "amount": 308.0,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-07-30T13:08:19Z",
+    "items": [
+      { "sku": "CG-HP-LOOP", "quantity": 1, "unitPrice": 129.0 },
+      { "sku": "CG-HP-FLOW", "quantity": 1, "unitPrice": 179.0 }
+    ],
+    "consent": { "source": "web-checkout", "confirmedAt": "2026-07-30T13:07:58Z" }
+  },
+  {
+    "id": "txn_00007",
+    "userId": "user_ada",
+    "merchantId": "mrch_northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 1899.0,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-08-01T10:34:22Z",
+    "items": [{ "sku": "NW-LP-16-PRO", "quantity": 1, "unitPrice": 1899.0 }],
+    "consent": { "source": "chatbot", "confirmedAt": "2026-08-01T10:34:05Z" }
+  },
+  {
+    "id": "txn_00008",
+    "userId": "user_alan",
+    "merchantId": "mrch_contoso",
+    "merchantName": "Contoso Goods",
+    "amount": 149.0,
+    "currency": "USD",
+    "status": "declined",
+    "createdAt": "2026-08-02T21:19:47Z",
+    "items": [{ "sku": "CG-GM-KEY", "quantity": 1, "unitPrice": 149.0 }],
+    "consent": { "source": "chatbot", "confirmedAt": "2026-08-02T21:19:31Z" }
+  }
+]

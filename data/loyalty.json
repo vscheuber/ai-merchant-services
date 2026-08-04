@@ -1,0 +1,30 @@
+[
+  {
+    "userId": "user_ada",
+    "merchantId": "mrch_northwind",
+    "points": 2500,
+    "lifetimePoints": 3626,
+    "tier": "gold"
+  },
+  {
+    "userId": "user_ada",
+    "merchantId": "mrch_contoso",
+    "points": 120,
+    "lifetimePoints": 120,
+    "tier": "bronze"
+  },
+  {
+    "userId": "user_grace",
+    "merchantId": "mrch_northwind",
+    "points": 500,
+    "lifetimePoints": 888,
+    "tier": "silver"
+  },
+  {
+    "userId": "user_alan",
+    "merchantId": "mrch_contoso",
+    "points": 1100,
+    "lifetimePoints": 1307,
+    "tier": "silver"
+  }
+]
