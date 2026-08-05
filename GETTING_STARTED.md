@@ -103,9 +103,10 @@ Then fill in real values for the features you want to enable:
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | `chatbot-agent` | Live LLM responses in the chat endpoint (scaffold echo stub does not use these) |
 | `AIC_TENANT_URL` / `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY` | `payment-api`, `chatbot-agent` | AIC provisioning and JIT user look-up (not used in the scaffold) |
 
-The AIC tenant URL for `volker-dev` is `https://idc.scheuber.io`. The `alpha`
-issuer base is `https://idc.scheuber.io/am/oauth2/realms/root/realms/alpha`;
-the `bravo` issuer base is the same with `/bravo` at the end.
+The AIC issuer URLs follow the pattern
+`https://<tenant-url>/am/oauth2/realms/root/realms/<realm>`. Replace
+`<tenant-url>` with the value from `config/aic/inputs/tenant.json` and
+`<realm>` with `alpha` (payment IDP) or `bravo` (merchant IDP).
 
 ## What requires a follow-on PR
 
@@ -141,9 +142,9 @@ and wallet routes return 501 / empty.
 ### PR 4 — Live chatbot (chatbot-agent)
 **Affected app:** `chatbot-agent`
 
-`POST /api/chat` is an echo stub. This PR wires it to the OpenAI API
-(`OPENAI_API_KEY` / `OPENAI_MODEL`) with tool-calling against the payment API
-(`/api/wallet`, `/api/loyalty`, `/api/checkout`).
+`POST /api/chat` is an echo stub. This PR wires it to the LLM provider
+configured via `OPENAI_API_KEY` / `OPENAI_MODEL` with tool-calling against
+the payment API (`/api/wallet`, `/api/loyalty`, `/api/checkout`).
 
 ### PR 5 — Checkout consent flow
 **Affected apps:** `chatbot-agent`, `payment-api`
