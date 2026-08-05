@@ -8,12 +8,54 @@ offers, and rewards) without the shopper ever leaving the **Northwind Retail**
 storefront. Every chatbot-initiated payment requires explicit in-chat user consent.
 
 Phase 1 scope is **Use Case 1 — Logged-In User & Loyalty Account Binding**.
-Identity is Ping/AIC end-to-end: merchant IDP = `bravo` realm, payment IDP = `alpha`
-realm, cross-realm trust via RFC 8693 token exchange.
+Identity is cloud IDP end-to-end: merchant IDP = `bravo` realm, payment IDP =
+`alpha` realm, with cross-realm federation via OAuth 2.0 token exchange.
 
 > **New here?** See [GETTING_STARTED.md](./GETTING_STARTED.md) for the first-run
 > walkthrough, what works now vs. what still needs wiring, and the follow-on PR
 > roadmap.
+
+---
+
+## Quickstart
+
+**Prerequisites:** Node 20 LTS (see `.nvmrc`) and pnpm 9
+(`corepack enable && corepack prepare pnpm@9.15.4 --activate`).
+
+```bash
+# Install all workspace dependencies
+pnpm install
+
+# Start all five dev servers in the background
+pnpm dev:start
+```
+
+No `.env.local` files are required — all apps render placeholder UI with zero
+environment configuration. Open http://localhost:3000 to see Northwind Retail
+with the Acme Assist chat overlay in the bottom-right corner.
+
+To start individual services:
+
+```bash
+pnpm --filter merchant-web dev        # http://localhost:3000
+pnpm --filter payment-user-web dev    # http://localhost:3001
+pnpm --filter payment-admin-web dev   # http://localhost:3002
+pnpm --filter payment-api dev         # http://localhost:3003
+pnpm --filter chatbot-agent dev       # http://localhost:3004
+```
+
+---
+
+## Service management
+
+```bash
+pnpm dev:start   # Start all five apps (skips any port already occupied)
+pnpm dev:stop    # Stop all five apps
+pnpm dev:status  # Show live/down status, PID, and URL for each service
+```
+
+Scripts live in `scripts/`. Each started service tails to `logs/<app>.log`.
+See [GETTING_STARTED.md](./GETTING_STARTED.md) for troubleshooting.
 
 ---
 
@@ -74,39 +116,7 @@ Shared packages:
 | Package | Description |
 | --- | --- |
 | `@acme/ui` | Tailwind preset, shadcn/ui primitives, `ThemeProvider`, `AppShell`, `ChatShell`. |
-| `@acme/shared` | TypeScript domain types and JSON read/write helpers for seed data. |
-
----
-
-## Quickstart
-
-**Prerequisites:** Node 20 LTS (see `.nvmrc`) and pnpm 9
-(`corepack enable && corepack prepare pnpm@9.15.4 --activate`).
-
-```bash
-# Install all workspace dependencies
-pnpm install
-
-# Start all five dev servers in the background
-pnpm dev:start
-```
-
-No `.env.local` files are required — all apps render placeholder UI with zero
-environment configuration. Open http://localhost:3000 to see Northwind Retail
-with the Acme Assist chat overlay in the bottom-right corner.
-
----
-
-## Service management
-
-```bash
-pnpm dev:start   # Start all five apps (skips any port already occupied)
-pnpm dev:stop    # Stop all five apps
-pnpm dev:status  # Show live/down status, PID, and URL for each service
-```
-
-Scripts live in `scripts/`. Each started service tails to `logs/<app>.log`.
-See [GETTING_STARTED.md](./GETTING_STARTED.md) for troubleshooting.
+| `@acme/shared` | TypeScript domain types (`Merchant`, `Product`, `Cart`, `WalletCard`, `Transaction`, `LoyaltyBalance`, `MerchantIdentity`, `PaymentIdentity`) and JSON read/write helpers for seed data. |
 
 ---
 
@@ -139,7 +149,7 @@ follow-on PRs land. The scaffold does not read any of these at runtime.
 | `PAYMENT_OIDC_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET` | `payment-user-web`, `payment-admin-web`, `payment-api` | Consumer/admin login and token validation (`alpha` realm) |
 | `PAYMENT_API_BASE_URL` | `merchant-web`, `payment-user-web`, `payment-admin-web`, `chatbot-agent` | Runtime calls from UIs and chatbot to the payment API |
 | `NEXT_PUBLIC_CHATBOT_EMBED_URL` | `merchant-web` | Configurable overlay URL (scaffold hard-codes `http://localhost:3004/embed.js`) |
-| `OPENAI_API_KEY` / `OPENAI_MODEL` | `chatbot-agent` | Live LLM responses (model default: `gpt-4.1-mini`) |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | `chatbot-agent` | Live LLM responses in the chat endpoint |
 | `AIC_TENANT_URL` / `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY` | `payment-api`, `chatbot-agent` | AIC provisioning and JIT `alpha_user` look-up |
 
 ---
