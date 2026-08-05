@@ -82,6 +82,49 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  apps/merchant-web:
+    dependencies:
+      '@acme/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@acme/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      next:
+        specifier: ^15.5.22
+        version: 15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next-themes:
+        specifier: ^0.4.4
+        version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.10
+        version: 20.19.43
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.4(postcss@8.5.25)
+      postcss:
+        specifier: ^8.4.49
+        version: 8.5.25
+      tailwindcss:
+        specifier: ^3.4.17
+        version: 3.4.19
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   apps/payment-api:
     dependencies:
       '@acme/shared':
