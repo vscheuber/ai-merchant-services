@@ -1,0 +1,18 @@
+[
+  {
+    "id": "mrch_northwind",
+    "name": "Northwind Retail",
+    "brand": "Northwind Retail",
+    "domains": ["northwind.local"],
+    "primaryColor": "#1f6feb",
+    "logoUrl": "/brand/northwind.svg"
+  },
+  {
+    "id": "mrch_contoso",
+    "name": "Contoso Goods",
+    "brand": "Contoso Goods",
+    "domains": ["contoso.local"],
+    "primaryColor": "#a3532b",
+    "logoUrl": "/brand/contoso.svg"
+  }
+]

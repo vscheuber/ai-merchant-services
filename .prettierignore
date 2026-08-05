@@ -1,0 +1,14 @@
+node_modules
+.next
+.turbo
+dist
+build
+coverage
+pnpm-lock.yaml
+config/aic/outputs
+*.log
+.DS_Store
+
+# Docs and workflow artefacts are edited outside Prettier's remit.
+CLAUDE.md
+.polaris/

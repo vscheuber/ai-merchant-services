@@ -1,0 +1,31 @@
+{
+  "name": "merchant-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Northwind Retail — demo merchant storefront (Next.js). Scaffold: renders the Acme Assist overlay via <script> include from chatbot-agent.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "start": "next start -p 3000",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@acme/shared": "workspace:*",
+    "@acme/ui": "workspace:*",
+    "next": "^15.5.22",
+    "next-themes": "^0.4.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.3"
+  }
+}

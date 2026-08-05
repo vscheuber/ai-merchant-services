@@ -1,0 +1,26 @@
+[
+  {
+    "id": "user_ada",
+    "userName": "ada.lovelace",
+    "email": "ada.lovelace@northwind.local",
+    "givenName": "Ada",
+    "sn": "Lovelace",
+    "merchantId": "mrch_northwind"
+  },
+  {
+    "id": "user_grace",
+    "userName": "grace.hopper",
+    "email": "grace.hopper@northwind.local",
+    "givenName": "Grace",
+    "sn": "Hopper",
+    "merchantId": "mrch_northwind"
+  },
+  {
+    "id": "user_alan",
+    "userName": "alan.turing",
+    "email": "alan.turing@contoso.local",
+    "givenName": "Alan",
+    "sn": "Turing",
+    "merchantId": "mrch_contoso"
+  }
+]
