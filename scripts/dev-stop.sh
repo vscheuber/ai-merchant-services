@@ -13,8 +13,8 @@ stop_app() {
   pid_file="$PID_DIR/$pkg.pid"
 
   if [ -f "$pid_file" ]; then
-    pid=$(cat "$pid_file")
-    if kill -0 "$pid" 2>/dev/null; then
+    pid=$(cat "$pid_file" | tr -dc '0-9')
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null
       rm -f "$pid_file"
       echo "  $name  — stopped (PID $pid)"

@@ -3,8 +3,6 @@
 # Already-running ports are skipped. Logs go to logs/<app>.log.
 # PIDs are written to scripts/pids/<app>.pid for use by dev-stop.sh.
 
-set -e
-
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="$REPO_ROOT/logs"
 PID_DIR="$REPO_ROOT/scripts/pids"
@@ -17,7 +15,7 @@ start_app() {
   port="$3"   # port number
 
   if lsof -ti tcp:"$port" > /dev/null 2>&1; then
-    echo "  $name  — skipping, already listening on :$port"
+    echo "  $name  — skipping — already listening on :$port"
     return
   fi
 
