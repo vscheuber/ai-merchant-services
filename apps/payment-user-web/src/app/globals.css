@@ -1,0 +1,4 @@
+/* App-level globals for payment-user-web. Re-exports the shared @acme/ui
+   globals (Tailwind layers + shadcn CSS tokens + `.no-scrollbar` utility). */
+
+@import '@acme/ui/styles/globals.css';
