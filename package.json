@@ -9,6 +9,9 @@
     "pnpm": ">=9"
   },
   "scripts": {
+    "dev:start": "sh scripts/dev-start.sh",
+    "dev:stop": "sh scripts/dev-stop.sh",
+    "dev:status": "sh scripts/dev-status.sh",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
