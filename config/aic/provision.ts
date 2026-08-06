@@ -119,6 +119,9 @@ async function upsertOAuth2Client(
   dryRun: boolean,
 ): Promise<ActionRecord> {
   const resourceType: ResourceType = 'OAuth2Client';
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: clientId };
+  }
   try {
     let live: Record<string, unknown>;
     try {
@@ -126,10 +129,6 @@ async function upsertOAuth2Client(
         clientId,
       )) as unknown as Record<string, unknown>;
     } catch {
-      // Not found — create
-      if (dryRun) {
-        return { action: 'dry-run', resourceType, realm, id: clientId };
-      }
       await instance.oauth2oidc.client.createOAuth2Client(
         clientId,
         desired as Parameters<typeof instance.oauth2oidc.client.createOAuth2Client>[1],
@@ -137,12 +136,8 @@ async function upsertOAuth2Client(
       console.log(`[${realm}] OAuth2Client created: ${clientId}`);
       return { action: 'created', resourceType, realm, id: clientId };
     }
-    // Found — merge and update
     const flat = flattenWrapped(live) as Record<string, unknown>;
     const merged = deepMerge(flat, desired as Record<string, unknown>);
-    if (dryRun) {
-      return { action: 'dry-run', resourceType, realm, id: clientId };
-    }
     await instance.oauth2oidc.client.updateOAuth2Client(
       clientId,
       merged as Parameters<typeof instance.oauth2oidc.client.updateOAuth2Client>[1],
@@ -164,6 +159,9 @@ async function upsertTrustedJwtIssuer(
   dryRun: boolean,
 ): Promise<ActionRecord> {
   const resourceType: ResourceType = 'OAuth2TrustedJwtIssuer';
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: issuerId };
+  }
   try {
     let live: Record<string, unknown>;
     try {
@@ -171,10 +169,6 @@ async function upsertTrustedJwtIssuer(
         issuerId,
       )) as unknown as Record<string, unknown>;
     } catch {
-      // Not found — create
-      if (dryRun) {
-        return { action: 'dry-run', resourceType, realm, id: issuerId };
-      }
       await instance.oauth2oidc.issuer.createOAuth2TrustedJwtIssuer(
         issuerId,
         desired as unknown as Parameters<typeof instance.oauth2oidc.issuer.createOAuth2TrustedJwtIssuer>[1],
@@ -184,9 +178,6 @@ async function upsertTrustedJwtIssuer(
     }
     const flat = flattenWrapped(live) as Record<string, unknown>;
     const merged = deepMerge(flat, desired as Record<string, unknown>);
-    if (dryRun) {
-      return { action: 'dry-run', resourceType, realm, id: issuerId };
-    }
     await instance.oauth2oidc.issuer.updateOAuth2TrustedJwtIssuer(
       issuerId,
       merged as unknown as Parameters<typeof instance.oauth2oidc.issuer.updateOAuth2TrustedJwtIssuer>[1],
@@ -200,6 +191,13 @@ async function upsertTrustedJwtIssuer(
   }
 }
 
+function stripAgentIdentityFields(obj: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...obj };
+  delete result['aiAgentIdentityUid'];
+  delete result['_aiAgentIdentity'];
+  return result;
+}
+
 async function upsertAIAgent(
   agentId: string,
   desired: AIAgentPayload,
@@ -208,11 +206,10 @@ async function upsertAIAgent(
   dryRun: boolean,
 ): Promise<ActionRecord> {
   const resourceType: ResourceType = 'AIAgent';
-  // Strip identity fields that must not be sent on create/update
-  const { aiAgentIdentityUid: _uid, _aiAgentIdentity: _identity, ...safeDesired } = desired as AIAgentPayload & {
-    aiAgentIdentityUid?: unknown;
-    _aiAgentIdentity?: unknown;
-  };
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: agentId };
+  }
+  const safeDesired = stripAgentIdentityFields(desired as Record<string, unknown>);
   try {
     let live: Record<string, unknown>;
     try {
@@ -220,10 +217,6 @@ async function upsertAIAgent(
         agentId,
       )) as unknown as Record<string, unknown>;
     } catch {
-      // Not found — create
-      if (dryRun) {
-        return { action: 'dry-run', resourceType, realm, id: agentId };
-      }
       await instance.agent.createAIAgent(
         agentId,
         safeDesired as Parameters<typeof instance.agent.createAIAgent>[1],
@@ -232,10 +225,9 @@ async function upsertAIAgent(
       return { action: 'created', resourceType, realm, id: agentId };
     }
     const flat = flattenWrapped(live) as Record<string, unknown>;
-    const merged = deepMerge(flat, safeDesired as Record<string, unknown>);
-    if (dryRun) {
-      return { action: 'dry-run', resourceType, realm, id: agentId };
-    }
+    const merged = stripAgentIdentityFields(
+      deepMerge(flat, safeDesired),
+    );
     await instance.agent.updateAIAgent(
       agentId,
       merged as Parameters<typeof instance.agent.updateAIAgent>[1],
