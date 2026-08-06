@@ -1,1 +1,62 @@
-[]
+[
+  {
+    "_id": "payment-user-web",
+    "coreOAuth2ClientConfig": {
+      "clientType": "Confidential",
+      "status": "Active",
+      "clientName": ["Acme Payments — Consumer"],
+      "scopes": ["openid", "profile", "email"],
+      "redirectionUris": ["http://localhost:3001/api/auth/callback/aic"],
+      "refreshTokenLifetime": 604800,
+      "accessTokenLifetime": 3600,
+      "authorizationCodeLifetime": 120
+    },
+    "advancedOAuth2ClientConfig": {
+      "grantTypes": ["authorization_code", "refresh_token"],
+      "isConsentImplied": false,
+      "responseTypes": ["code"],
+      "tokenEndpointAuthMethod": "client_secret_post"
+    }
+  },
+  {
+    "_id": "payment-admin-web",
+    "coreOAuth2ClientConfig": {
+      "clientType": "Confidential",
+      "status": "Active",
+      "clientName": ["Acme Payments — Admin"],
+      "scopes": ["openid", "profile", "email"],
+      "redirectionUris": ["http://localhost:3002/api/auth/callback/aic"],
+      "refreshTokenLifetime": 604800,
+      "accessTokenLifetime": 3600,
+      "authorizationCodeLifetime": 120
+    },
+    "advancedOAuth2ClientConfig": {
+      "grantTypes": ["authorization_code", "refresh_token"],
+      "isConsentImplied": false,
+      "responseTypes": ["code"],
+      "tokenEndpointAuthMethod": "client_secret_post"
+    }
+  },
+  {
+    "_id": "payment-api",
+    "coreOAuth2ClientConfig": {
+      "clientType": "Confidential",
+      "status": "Active",
+      "clientName": ["Acme Payments — API"],
+      "scopes": ["openid", "profile", "email"],
+      "redirectionUris": [],
+      "refreshTokenLifetime": 604800,
+      "accessTokenLifetime": 3600,
+      "authorizationCodeLifetime": 120
+    },
+    "advancedOAuth2ClientConfig": {
+      "grantTypes": [
+        "client_credentials",
+        "urn:ietf:params:oauth:grant-type:token-exchange"
+      ],
+      "isConsentImplied": true,
+      "responseTypes": ["token"],
+      "tokenEndpointAuthMethod": "client_secret_post"
+    }
+  }
+]

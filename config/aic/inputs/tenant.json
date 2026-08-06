@@ -1,5 +1,5 @@
 {
-  "tenantUrl": "https://idc.example.local",
+  "tenantUrl": "https://idc.scheuber.io",
   "adminServiceAccountEnv": "AIC_ADMIN_SVC_ACCOUNT_ID",
   "adminServiceAccountKeyEnv": "AIC_ADMIN_SVC_ACCOUNT_KEY"
 }

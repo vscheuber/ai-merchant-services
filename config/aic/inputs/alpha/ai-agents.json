@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "_id": "chatbot-agent",
+    "coreOAuth2ClientConfig": {
+      "clientType": "Confidential",
+      "status": "Active",
+      "clientName": ["Acme Assist"],
+      "scopes": ["openid", "profile", "email"],
+      "redirectionUris": ["http://localhost:3004/api/auth/callback/aic"],
+      "refreshTokenLifetime": 604800,
+      "accessTokenLifetime": 3600,
+      "authorizationCodeLifetime": 120
+    },
+    "advancedOAuth2ClientConfig": {
+      "grantTypes": ["authorization_code"],
+      "isConsentImplied": false,
+      "responseTypes": ["code"],
+      "tokenEndpointAuthMethod": "client_secret_post"
+    },
+    "aiAgentIdentityAttributes": {
+      "name": "Acme Assist",
+      "description": "Acme Assist — AI-powered merchant services chatbot agent",
+      "customAttributes": null
+    }
+  }
+]
