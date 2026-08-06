@@ -2,12 +2,15 @@
   "name": "@acme/aic-config",
   "version": "0.0.0",
   "private": true,
-  "description": "AIC provisioning-config skeleton for the ai-merchant-services scaffold. Scaffold: provision.ts is a no-op stub.",
+  "description": "AIC tenant provisioning script",
   "type": "module",
   "scripts": {
     "provision": "tsx provision.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
+  },
+  "dependencies": {
+    "@rockcarver/frodo-lib": "^4.1.7"
   },
   "devDependencies": {
     "@types/node": "^20.17.10",
