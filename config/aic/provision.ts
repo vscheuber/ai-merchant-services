@@ -357,7 +357,8 @@ export async function provision(
   } else {
     const outputDir = join(__dirname, 'outputs');
     mkdirSync(outputDir, { recursive: true });
-    const outPath = join(outputDir, 'provision-summary.json');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const outPath = join(outputDir, `provision-run-${ts}.json`);
     writeFileSync(outPath, JSON.stringify(summary, null, 2), 'utf-8');
     console.log(`\nSummary written to ${outPath}`);
   }
