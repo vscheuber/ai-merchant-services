@@ -5,7 +5,7 @@
   "description": "AIC tenant provisioning script",
   "type": "module",
   "scripts": {
-    "provision": "tsx provision.ts",
+    "provision": "NODE_OPTIONS='--conditions require' tsx provision.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
