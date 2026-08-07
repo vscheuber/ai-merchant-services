@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["provision.ts"],
+  "include": ["provision.ts", "types.ts"],
   "exclude": ["node_modules", "outputs"]
 }

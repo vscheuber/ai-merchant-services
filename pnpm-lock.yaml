@@ -240,6 +240,10 @@ importers:
         version: 5.9.3
 
   config/aic:
+    dependencies:
+      '@rockcarver/frodo-lib':
+        specifier: ^4.1.7
+        version: 4.1.7
     devDependencies:
       '@types/node':
         specifier: ^20.17.10
@@ -741,6 +745,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@rockcarver/frodo-lib@4.1.7':
+    resolution: {integrity: sha512-KUTHTz4JVphvVK0Nx++XvkN3bP6fuoC1oBSwKEyO1KxYJVHi6pqgdMU4lrLfu2vVdbgDneueJSvva+NDm4KYJg==}
+    engines: {node: '>=20'}
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
@@ -2373,6 +2381,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@rockcarver/frodo-lib@4.1.7': {}
 
   '@rtsao/scc@1.1.0': {}
 

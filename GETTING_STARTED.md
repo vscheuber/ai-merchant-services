@@ -76,7 +76,7 @@ Everything below runs with **zero `.env.local` configuration**:
 | `pnpm dev:start / stop / status` scripts | Yes | Full service management |
 | `pnpm -w typecheck` | Yes | Zero errors across all 8 workspace projects |
 | `pnpm -w lint` | Yes | Clean |
-| `pnpm --filter @acme/aic-config provision` | Yes | Prints "not yet implemented" and exits 0 |
+| `pnpm --filter @acme/aic-config provision` | Yes | Validates env vars; requires `AIC_ADMIN_SVC_ACCOUNT_ID` + `AIC_ADMIN_SVC_ACCOUNT_KEY` to run live; `--dry-run` prints plan without credentials |
 
 ## What requires environment variables
 
@@ -120,17 +120,28 @@ features do not work yet — each requires a dedicated wiring PR:
 Without this, all pages are unprotected stubs. Auth.js v5 (`next-auth@5`) is
 the chosen library; OIDC config goes in `apps/*/src/app/api/auth/[...nextauth]/route.ts`.
 
-### PR 2 — AIC provisioning (`config/aic/provision.ts`)
-**Affected component:** `config/aic/`
+### ~~PR 2 — AIC provisioning (`config/aic/provision.ts`)~~ ✓ merged
 
-`provision.ts` is currently a no-op stub. This PR implements it using the
-`mcp-volker-dev` tooling to create:
+`provision.ts` is fully implemented. Run it with real service-account credentials:
+
+```bash
+export AIC_ADMIN_SVC_ACCOUNT_ID=<uuid>
+export AIC_ADMIN_SVC_ACCOUNT_KEY='<jwk-json>'
+pnpm --filter @acme/aic-config provision
+```
+
+Or preview the plan without making any API calls:
+
+```bash
+pnpm --filter @acme/aic-config provision -- --dry-run
+```
+
+This creates or idempotently updates:
 - OAuth2 clients for each app in the appropriate realm (`alpha` or `bravo`)
 - An `OAuth2TrustedJwtIssuer` on `alpha` registering `bravo` as a trusted issuer
 - The Acme Assist AI Agent (`agent.AIAgent`) on `alpha`
 
-The `config/aic/inputs/{alpha,bravo}/*.json` files contain empty arrays
-ready to be populated.
+Run provisioning before wiring OIDC login (PR 1).
 
 ### PR 3 — JIT `alpha_user` provisioning (payment-api)
 **Affected app:** `payment-api`
