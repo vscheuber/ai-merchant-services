@@ -1,18 +1,17 @@
 // Account page — requires an authenticated Auth.js session.
 //
-// On the first render, `auth()` is called server-side. If no session exists the
-// user is redirected to the Auth.js sign-in page, which in turn redirects to the
-// AIC bravo realm login. After a successful OIDC login the user lands back here
-// with a valid session.
+// Fetches live loyalty and wallet data from payment-api using the bravo
+// access_token from the server-side session as a Bearer token. Both fetches
+// are non-blocking: if the payment-api is unavailable the page renders with
+// a graceful "unavailable" fallback rather than crashing.
 //
-// Task 5 scope: session protection + user name display from session.
-// Task 6 will replace the stub loyalty card below with live payment-api data.
+// The OIDC subject identifier (session.userId — the AIC bravo_user _id, e.g.
+// "user_ada") is used as the payment-api userId parameter.
 //
 // Next.js App Router requires a default export.
 
 import { redirect } from 'next/navigation'
-import type { LoyaltyBalance, Merchant } from '@acme/shared'
-import { deriveLoyaltyTier } from '@acme/shared'
+import type { LoyaltyBalance, Merchant, WalletCard } from '@acme/shared'
 import { AppShell, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@acme/ui'
 import { auth } from '../../auth'
 
@@ -32,26 +31,62 @@ const merchant: Merchant = {
   logoUrl: '/brand/northwind.svg',
 }
 
-// Stub loyalty data — will be replaced with live payment-api fetch in Task 6.
-const loyalty: LoyaltyBalance = {
-  userId: 'usr_demo_ada',
-  merchantId: merchant.id,
-  points: 1240,
-  lifetimePoints: 3820,
-  tier: deriveLoyaltyTier(3820),
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function brandLabel(brand: WalletCard['brand']): string {
+  switch (brand) {
+    case 'visa':
+      return 'Visa'
+    case 'mastercard':
+      return 'Mastercard'
+    case 'amex':
+      return 'Amex'
+  }
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function AccountPage() {
   const session = await auth()
 
   // Redirect to the AIC bravo realm login if there is no active session.
-  // `redirect()` from next/navigation throws internally, so TypeScript narrows
-  // the type of `session` to non-null after this block.
   if (!session) {
     redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/account'))
   }
 
   const userName = session.user?.name ?? '—'
+  const userId = session.userId ?? ''
+  const token = session.accessToken ?? ''
+  const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
+
+  // ── Loyalty fetch (best-effort) ──────────────────────────────────────────
+  let loyalty: LoyaltyBalance | null = null
+  try {
+    const res = await fetch(
+      `${baseUrl}/api/loyalty?userId=${encodeURIComponent(userId)}&merchantId=${encodeURIComponent(merchant.id)}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },
+    )
+    if (res.ok) {
+      const records = (await res.json()) as LoyaltyBalance[]
+      loyalty = records[0] ?? null
+    }
+  } catch {
+    // Non-blocking — page renders with "unavailable" fallback below.
+  }
+
+  // ── Wallet fetch (best-effort) ───────────────────────────────────────────
+  let walletCards: WalletCard[] = []
+  try {
+    const res = await fetch(
+      `${baseUrl}/api/wallet?userId=${encodeURIComponent(userId)}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },
+    )
+    if (res.ok) {
+      walletCards = (await res.json()) as WalletCard[]
+    }
+  } catch {
+    // Non-blocking.
+  }
 
   return (
     <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
@@ -64,6 +99,7 @@ export default async function AccountPage() {
       </section>
 
       <section className="mt-8 grid gap-4 md:grid-cols-2">
+        {/* ── Profile ──────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
@@ -83,23 +119,60 @@ export default async function AccountPage() {
           </CardContent>
         </Card>
 
+        {/* ── Loyalty ──────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle>Loyalty</CardTitle>
-            <CardDescription>Points balance for this merchant.</CardDescription>
+            <CardDescription>Points balance for {merchant.name}.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1 text-sm text-muted-foreground">
-            <p>
-              <span className="font-medium text-foreground">Tier:</span>{' '}
-              <span className="capitalize">{loyalty.tier}</span>
-            </p>
-            <p>
-              <span className="font-medium text-foreground">Points:</span> {loyalty.points}
-            </p>
-            <p>
-              <span className="font-medium text-foreground">Lifetime points:</span>{' '}
-              {loyalty.lifetimePoints}
-            </p>
+            {loyalty == null ? (
+              <p className="italic">Loyalty data unavailable.</p>
+            ) : (
+              <>
+                <p>
+                  <span className="font-medium text-foreground">Tier:</span>{' '}
+                  <span className="capitalize">{loyalty.tier}</span>
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Points:</span>{' '}
+                  {loyalty.points.toLocaleString()}
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Lifetime points:</span>{' '}
+                  {loyalty.lifetimePoints.toLocaleString()}
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Wallet ───────────────────────────────────────────────────── */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Saved cards</CardTitle>
+            <CardDescription>
+              Cards on file for Northwind Retail. Full card numbers are never stored.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {walletCards.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No cards on file.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {walletCards.map((card) => (
+                  <li key={card.id} className="flex items-center justify-between py-2 text-sm">
+                    <span className="font-medium text-foreground">
+                      {brandLabel(card.brand)} •••• {card.last4}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {card.cardholderName} · Exp {card.expiryMonth.toString().padStart(2, '0')}/
+                      {card.expiryYear}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </section>

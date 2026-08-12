@@ -17,6 +17,7 @@
 
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@acme/ui';
+import { CartProvider } from '../components/cart-provider';
 
 import './globals.css';
 
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <CartProvider>
+            {children}
+          </CartProvider>
         </ThemeProvider>
         {/*
           Acme Assist overlay — served by chatbot-agent on port 3004.

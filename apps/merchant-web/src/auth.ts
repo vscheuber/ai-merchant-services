@@ -17,7 +17,8 @@
 //   MERCHANT_OIDC_CLIENT_SECRET — OAuth2 client secret
 //   AUTH_SECRET                 — Random secret used to sign/encrypt Auth.js cookies
 
-// Extend the built-in Auth.js Session type to expose the bravo access_token.
+// Extend the built-in Auth.js Session type to expose the bravo access_token
+// and the OIDC subject identifier (used as userId in payment-api calls).
 // This augmentation must be declared in the same module that exports `auth` so
 // that TypeScript picks it up wherever `auth()` is called.
 import type { Session } from "next-auth"
@@ -25,6 +26,13 @@ declare module "next-auth" {
   interface Session {
     /** Bravo realm access_token — persisted for downstream token-exchange (Task 9). */
     accessToken?: string
+    /**
+     * OIDC subject identifier from the bravo realm JWT.
+     * In this project the AIC bravo_user `_id` is set to the data-layer userId
+     * (e.g. "user_ada"), so this value can be used directly as the `userId`
+     * query parameter in payment-api calls.
+     */
+    userId?: string
   }
 }
 
@@ -64,6 +72,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // The cast is safe: we only ever write a string to this slot in the jwt
       // callback above; the JWT's index signature types it as unknown.
       ;(session as Session).accessToken = token["accessToken"] as string | undefined
+      // Expose the OIDC sub as session.userId for payment-api calls.
+      // Auth.js v5 JWT sessions do NOT set session.user.id automatically
+      // (only the database strategy does); we must propagate token.sub here.
+      // token.sub is the bravo realm user's _id — provisioned as "user_ada"
+      // etc. — so it matches the userId keys in data/*.json.
+      ;(session as Session).userId = token.sub
       return session
     },
   },
