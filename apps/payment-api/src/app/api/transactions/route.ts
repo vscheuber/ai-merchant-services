@@ -63,6 +63,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // userId and merchantId are required — an empty string would produce an
+  // orphaned record that can never be retrieved by the userId filter and
+  // pollutes loyalty / admin reporting.
+  const userId = body['userId'] ? String(body['userId']) : '';
+  const merchantId = body['merchantId'] ? String(body['merchantId']) : '';
+  if (!userId || !merchantId) {
+    return NextResponse.json(
+      {
+        error: 'bad_request',
+        message: 'Missing required fields: userId, merchantId.',
+      },
+      { status: 400 },
+    );
+  }
+
   let transactions: Transaction[];
   try {
     transactions = await readJson<Transaction[]>(dataFilePath('transactions'));
@@ -75,8 +90,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const newTransaction: Transaction = {
     id: nextTxnId(transactions),
-    userId: String(body['userId'] ?? ''),
-    merchantId: String(body['merchantId'] ?? ''),
+    userId,
+    merchantId,
     merchantName: String(body['merchantName'] ?? ''),
     amount: Number(body['amount'] ?? 0),
     currency: String(body['currency'] ?? 'USD'),

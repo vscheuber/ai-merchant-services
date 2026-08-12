@@ -78,6 +78,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // Guard against missing or empty cart.items — an empty array would produce
+  // a zero-amount captured transaction; undefined items would throw a TypeError
+  // inside the for-of loop below.
+  if (!Array.isArray(cart.items) || cart.items.length === 0) {
+    return NextResponse.json(
+      {
+        error: 'bad_request',
+        message: 'Cart must contain at least one item.',
+      },
+      { status: 400 },
+    );
+  }
+
   const merchantId = cart.merchantId;
 
   // --- Look up products to compute authoritative totalAmount ---
