@@ -48,7 +48,7 @@ export default async function AccountPage() {
   // `redirect()` from next/navigation throws internally, so TypeScript narrows
   // the type of `session` to non-null after this block.
   if (!session) {
-    redirect('/api/auth/signin')
+    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/account'))
   }
 
   const userName = session.user?.name ?? '—'
