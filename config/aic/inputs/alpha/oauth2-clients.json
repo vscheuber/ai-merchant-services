@@ -43,7 +43,7 @@
       "clientType": "Confidential",
       "status": "Active",
       "clientName": ["Acme Payments — API"],
-      "scopes": ["openid", "profile", "email"],
+      "scopes": ["openid", "profile", "email", "fr:idm:*"],
       "redirectionUris": [],
       "refreshTokenLifetime": 604800,
       "accessTokenLifetime": 3600,

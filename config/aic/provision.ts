@@ -8,6 +8,7 @@ import type {
   OAuth2ClientPayload,
   AIAgentPayload,
   TrustedJwtIssuerPayload,
+  BravoUser,
   ActionRecord,
   ResourceType,
   RunSummary,
@@ -42,6 +43,10 @@ function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
 
 function loadBravoOAuth2Clients(): OAuth2ClientPayload[] {
   return loadJson<OAuth2ClientPayload[]>('inputs/bravo/oauth2-clients.json');
+}
+
+function loadBravoUsers(): BravoUser[] {
+  return loadJson<BravoUser[]>('../../data/users.json');
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +246,55 @@ async function upsertAIAgent(
   }
 }
 
+async function upsertBravoUser(
+  user: BravoUser,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'BravoUser';
+  const userId = user.id;
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: userId };
+  }
+  // Build the managed object payload (bravo_user shape)
+  const moData = {
+    userName: user.userName,
+    mail: user.email,
+    givenName: user.givenName,
+    sn: user.sn,
+    merchantId: user.merchantId,
+    userPassword: 'Br@vo1234!',
+  };
+  try {
+    // Try to read the existing managed object by _id
+    try {
+      await instance.idm.managed.readManagedObject('bravo_user', userId);
+    } catch {
+      // Does not exist — create it
+      await instance.idm.managed.createManagedObject(
+        'bravo_user',
+        moData as Parameters<typeof instance.idm.managed.createManagedObject>[1],
+        userId,
+      );
+      console.log(`[${realm}] BravoUser created: ${userId} (${user.userName})`);
+      return { action: 'created', resourceType, realm, id: userId };
+    }
+    // Exists — update it
+    await instance.idm.managed.updateManagedObject(
+      'bravo_user',
+      userId,
+      moData as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+    );
+    console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
+    return { action: 'updated', resourceType, realm, id: userId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[${realm}] BravoUser skipped (${userId}): ${msg}`);
+    return { action: 'skipped', resourceType, realm, id: userId, error: msg };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main provision function
 // ---------------------------------------------------------------------------
@@ -269,6 +323,7 @@ export async function provision(
   const alphaAgents = loadAlphaAIAgents();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
   const bravoClients = loadBravoOAuth2Clients();
+  const bravoUsers = loadBravoUsers();
 
   // Create frodo instances
   const alphaInstance = frodo.createInstanceWithServiceAccount(
@@ -325,6 +380,13 @@ export async function provision(
     if (!id) continue;
     actions.push(
       await upsertOAuth2Client(id, client, bravoInstance, '/bravo', dryRun),
+    );
+  }
+
+  // Bravo Users
+  for (const user of bravoUsers) {
+    actions.push(
+      await upsertBravoUser(user, bravoInstance, '/bravo', dryRun),
     );
   }
 

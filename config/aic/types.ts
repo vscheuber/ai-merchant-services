@@ -63,8 +63,27 @@ export interface TrustedJwtIssuerPayload {
   [key: string]: unknown;
 }
 
+/**
+ * Represents a `managed/bravo_user` object in the AIC bravo realm.
+ * Mirrors the `MerchantIdentity` shape from `@acme/shared`.
+ */
+export interface BravoUser {
+  /** Stable synthetic id, e.g. `user_ada`. Used as the managed object `_id`. */
+  id: string;
+  /** Login/user name. */
+  userName: string;
+  /** Primary email. */
+  email: string;
+  /** Given name. */
+  givenName: string;
+  /** Surname (maps to AIC's `sn` field). */
+  sn: string;
+  /** Merchant this account belongs to. */
+  merchantId: string;
+}
+
 export type ActionType = 'created' | 'updated' | 'skipped' | 'dry-run';
-export type ResourceType = 'OAuth2Client' | 'OAuth2TrustedJwtIssuer' | 'AIAgent';
+export type ResourceType = 'OAuth2Client' | 'OAuth2TrustedJwtIssuer' | 'AIAgent' | 'BravoUser';
 
 export interface ActionRecord {
   action: ActionType;
