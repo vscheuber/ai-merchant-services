@@ -1,31 +1,227 @@
-// Checkout route — scaffold stub.
+// Checkout route — validates consent, computes the authoritative total from
+// the product catalog, records the transaction, accrues loyalty points, and
+// returns a CheckoutSession.
 //
-// GET returns a shape-correct empty checkout status object (no active
-// session) so consumers can round-trip against a stable JSON shape. POST
-// returns 501 Not Implemented. The real handler will initiate a checkout
-// after enforcing the mandatory in-chat consent (requirements FR 12 /
-// Constraint 13); the scaffold only reserves the surface.
+// POST /api/checkout
+//   Body: { userId, selectedCardId, cart: Cart, consent: Consent }
+//   Returns: CheckoutSession with status "captured".
+//
+// Consent enforcement: the request body must include a `consent` object with
+// both `source` and `confirmedAt` fields; missing or empty consent returns
+// HTTP 400 (requirements FR 14 / architecture "Checkout consent enforcement
+// is server-side").
+//
+// This route is protected by the JWT middleware in `src/middleware.ts`.
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { readJson, writeJson, deriveLoyaltyTier } from '@acme/shared';
+import type {
+  Cart,
+  Consent,
+  CheckoutSession,
+  Transaction,
+  Product,
+  LoyaltyBalance,
+  Merchant,
+} from '@acme/shared';
 
-/**
- * Shape-correct empty checkout status. Kept local to the stub because the
- * production checkout response has not been designed yet; the follow-on PR
- * will replace this with a proper `CheckoutSession` type in `@acme/shared`.
- */
-interface EmptyCheckoutStatus {
-  session: null;
-  pendingConsent: false;
+import { dataFilePath } from '../../../lib/data-paths';
+
+/** Derive the next sequential transaction id from the current list. */
+function nextTxnId(existing: readonly Transaction[]): string {
+  const max = existing.reduce((m, t) => {
+    const n = parseInt(t.id.replace(/^txn_/, ''), 10);
+    return isNaN(n) ? m : Math.max(m, n);
+  }, 0);
+  return `txn_${String(max + 1).padStart(5, '0')}`;
 }
 
-export function GET(): NextResponse {
-  const empty: EmptyCheckoutStatus = { session: null, pendingConsent: false };
-  return NextResponse.json(empty);
+/** Generate a checkout session id using the current timestamp. */
+function nextChkId(): string {
+  return `chk_${String(Date.now()).slice(-10)}`;
 }
 
-export function POST(): NextResponse {
-  return NextResponse.json(
-    { error: 'not_implemented', message: 'POST /api/checkout is a scaffold stub.' },
-    { status: 501 },
-  );
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'Invalid JSON body.' },
+      { status: 400 },
+    );
+  }
+
+  // --- Consent validation (requirements FR 14 / architecture decision) ---
+  const consent = body['consent'] as Consent | undefined;
+  if (!consent?.source || !consent?.confirmedAt) {
+    return NextResponse.json(
+      {
+        error: 'bad_request',
+        message: 'Missing required consent object (source, confirmedAt).',
+      },
+      { status: 400 },
+    );
+  }
+
+  const userId = body['userId'] ? String(body['userId']) : '';
+  const selectedCardId = body['selectedCardId'] ? String(body['selectedCardId']) : '';
+  const cart = body['cart'] as Cart | undefined;
+
+  if (!userId || !selectedCardId || !cart) {
+    return NextResponse.json(
+      {
+        error: 'bad_request',
+        message: 'Missing required fields: userId, selectedCardId, cart.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const merchantId = cart.merchantId;
+
+  // --- Look up products to compute authoritative totalAmount ---
+  let products: Product[];
+  try {
+    products = await readJson<Product[]>(dataFilePath('products'));
+  } catch {
+    return NextResponse.json(
+      { error: 'internal_error', message: 'Product catalog unavailable.' },
+      { status: 503 },
+    );
+  }
+
+  const productMap = new Map(products.map((p) => [p.sku, p]));
+  let totalAmount = 0;
+  for (const item of cart.items) {
+    const product = productMap.get(item.sku);
+    if (!product) {
+      return NextResponse.json(
+        { error: 'bad_request', message: `Unknown product SKU: ${item.sku}.` },
+        { status: 400 },
+      );
+    }
+    totalAmount += product.price * item.quantity;
+  }
+
+  // Use the product's currency; fall back to the cart's declared currency.
+  const currency =
+    (cart.items.length > 0 ? productMap.get(cart.items[0]!.sku)?.currency : undefined) ??
+    cart.currency ??
+    'USD';
+
+  // --- Look up merchant name for the denormalized transaction field ---
+  let merchants: Merchant[];
+  try {
+    merchants = await readJson<Merchant[]>(dataFilePath('merchants'));
+  } catch {
+    return NextResponse.json(
+      { error: 'internal_error', message: 'Merchant data unavailable.' },
+      { status: 503 },
+    );
+  }
+
+  const merchant = merchants.find((m) => m.id === merchantId);
+  const merchantName = merchant?.name ?? merchantId;
+
+  // --- Append the transaction to data/transactions.json ---
+  let transactions: Transaction[];
+  try {
+    transactions = await readJson<Transaction[]>(dataFilePath('transactions'));
+  } catch {
+    return NextResponse.json(
+      { error: 'internal_error', message: 'Transactions unavailable.' },
+      { status: 503 },
+    );
+  }
+
+  const now = new Date().toISOString();
+
+  const newTransaction: Transaction = {
+    id: nextTxnId(transactions),
+    userId,
+    merchantId,
+    merchantName,
+    amount: totalAmount,
+    currency,
+    status: 'captured',
+    createdAt: now,
+    items: cart.items.map((item) => ({
+      sku: item.sku,
+      quantity: item.quantity,
+      unitPrice: productMap.get(item.sku)!.price,
+    })),
+    consent,
+  };
+
+  try {
+    await writeJson(dataFilePath('transactions'), [...transactions, newTransaction]);
+  } catch {
+    return NextResponse.json(
+      { error: 'internal_error', message: 'Failed to record transaction.' },
+      { status: 503 },
+    );
+  }
+
+  // --- Accrue loyalty points (1 point per dollar, truncated) ---
+  // Best-effort: a loyalty write failure does not roll back the captured
+  // transaction. The transaction is the authoritative record; loyalty
+  // can be reconciled from it if needed.
+  const earnedPoints = Math.floor(totalAmount);
+
+  try {
+    const loyaltyRecords = await readJson<LoyaltyBalance[]>(dataFilePath('loyalty'));
+    const loyaltyIdx = loyaltyRecords.findIndex(
+      (r) => r.userId === userId && r.merchantId === merchantId,
+    );
+
+    let updatedLoyalty: LoyaltyBalance[];
+    if (loyaltyIdx >= 0) {
+      const existing = loyaltyRecords[loyaltyIdx]!;
+      const newLifetimePoints = existing.lifetimePoints + earnedPoints;
+      updatedLoyalty = [
+        ...loyaltyRecords.slice(0, loyaltyIdx),
+        {
+          ...existing,
+          points: existing.points + earnedPoints,
+          lifetimePoints: newLifetimePoints,
+          tier: deriveLoyaltyTier(newLifetimePoints),
+        },
+        ...loyaltyRecords.slice(loyaltyIdx + 1),
+      ];
+    } else {
+      updatedLoyalty = [
+        ...loyaltyRecords,
+        {
+          userId,
+          merchantId,
+          points: earnedPoints,
+          lifetimePoints: earnedPoints,
+          tier: deriveLoyaltyTier(earnedPoints),
+        },
+      ];
+    }
+    await writeJson(dataFilePath('loyalty'), updatedLoyalty);
+  } catch {
+    // Best-effort: log the failure but do not affect the checkout response.
+    console.error('[checkout] Loyalty accrual failed for user', userId, '— skipping.');
+  }
+
+  // --- Build and return the CheckoutSession ---
+  const checkoutSession: CheckoutSession = {
+    id: nextChkId(),
+    userId,
+    merchantId,
+    cart,
+    status: 'captured',
+    selectedCardId,
+    totalAmount,
+    currency,
+    ...(cart.redeemedPoints !== undefined
+      ? { loyaltyPointsRedeemed: cart.redeemedPoints }
+      : {}),
+    createdAt: now,
+  };
+
+  return NextResponse.json(checkoutSession, { status: 201 });
 }
