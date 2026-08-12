@@ -6,13 +6,12 @@
 // (not on a separate route the user navigates to), which satisfies the FR 8 /
 // AC 6 primary-surface half.
 //
-// The `embed.js` URL is hard-coded to `http://localhost:3004/embed.js` for the
-// scaffold's simplicity. `chatbot-agent`'s Next config (Task 5) already sets
+// The `embed.js` URL is read from `NEXT_PUBLIC_CHATBOT_EMBED_URL`, falling back
+// to `http://localhost:3004/embed.js` for local development. The env var is
+// declared in `.env.example`. `chatbot-agent`'s Next config already sets
 // `Access-Control-Allow-Origin: *` and an explicit
 // `Content-Type: application/javascript` on that path, so the cross-origin
-// load from `localhost:3000` works without any per-app config here. A
-// follow-on PR can swap the string for `process.env.NEXT_PUBLIC_CHATBOT_EMBED_URL`
-// (declared in `.env.example`) when environments beyond local dev come online.
+// load from `localhost:3000` works without any per-app config here.
 //
 // Next.js App Router requires a default export.
 
@@ -21,7 +20,8 @@ import { ThemeProvider } from '@acme/ui';
 
 import './globals.css';
 
-const CHATBOT_EMBED_URL = 'http://localhost:3004/embed.js';
+const CHATBOT_EMBED_URL =
+  process.env['NEXT_PUBLIC_CHATBOT_EMBED_URL'] ?? 'http://localhost:3004/embed.js';
 
 export const metadata = {
   title: 'Northwind Retail — shop electronics, laptops, phones, and more',
