@@ -10,8 +10,9 @@
 // returned before the route handler runs.
 //
 // Scope enforcement is deferred (per architecture decision, requirements
-// section "Resolved Decisions" point 4). Only issuer/subject validation is
-// performed here via JWKS-backed RS256 signature verification.
+// section "Resolved Decisions" point 4). The issuer claim (`iss`) is validated
+// against `PAYMENT_OIDC_ISSUER`. Subject-claim enforcement is deferred. Token
+// signature is verified via JWKS-backed RS256.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -47,7 +48,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   // Extract Bearer token from the Authorization header.
-  const authHeader = request.headers.get('Authorization') ?? request.headers.get('authorization');
+  // The Web API `Headers` interface is case-insensitive (RFC 7230 / WHATWG Fetch),
+  // so a single lowercase lookup is sufficient.
+  const authHeader = request.headers.get('authorization');
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   if (!token) {
@@ -58,7 +61,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    await jwtVerify(token, getJwks());
+    await jwtVerify(token, getJwks(), {
+      issuer: process.env['PAYMENT_OIDC_ISSUER'],
+    });
   } catch {
     return NextResponse.json(
       { error: 'unauthorized', message: 'Invalid or expired Bearer token.' },

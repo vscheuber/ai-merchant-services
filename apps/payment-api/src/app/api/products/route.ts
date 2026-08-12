@@ -24,7 +24,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const products = await readJson<Product[]>(dataFilePath('products'));
+  let products: Product[];
+  try {
+    products = await readJson<Product[]>(dataFilePath('products'));
+  } catch {
+    return NextResponse.json(
+      { error: 'internal_error', message: 'Product catalog unavailable.' },
+      { status: 503 },
+    );
+  }
+
   const filtered = products.filter((p) => p.merchantId === merchantId);
 
   return NextResponse.json(filtered);
