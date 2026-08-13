@@ -1,55 +1,70 @@
-// Placeholder Checkout route. Renders a scaffold-only "not wired yet" panel
-// inside the shared `AppShell`, calling out the FR 12 human-in-the-loop
-// requirement that the chat overlay's Confirm & pay button is the mandatory
-// consent slot for chatbot-initiated payments. Next.js App Router requires a
-// default export.
+// Checkout page — requires an authenticated Auth.js session.
+//
+// Server Component that:
+//   1. Guards the route with auth() — redirects unauthenticated users to the
+//      AIC bravo realm login page with a callbackUrl pointing back to /checkout.
+//   2. Exchanges the bravo access_token from the Auth.js session for an alpha
+//      realm token via getAlphaToken, then fetches the shopper's saved wallet
+//      cards from payment-api using the alpha token as Bearer.
+//   3. Passes walletCards and userId to CheckoutForm for the interactive UI.
+//
+// payment-api validates tokens against the alpha realm JWKS only; a bravo token
+// would be rejected with 401. getAlphaToken performs the full Step 1 exchange
+// (matching the pattern used by account/page.tsx and products/page.tsx).
+//
+// The cart summary, card selector, and form submission are handled by the
+// CheckoutForm client component (checkout-form.tsx), which reads cart state
+// from CartProvider (wired in the root layout by Task 6).
+//
+// Next.js App Router requires a default export.
 
-import { AppShell, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@acme/ui';
+import { redirect } from 'next/navigation'
+import type { WalletCard } from '@acme/shared'
+import { auth } from '../../auth'
+import { getAlphaToken } from '../../lib/alpha-token'
+import { CheckoutForm } from './checkout-form'
 
-const nav = [
-  { label: 'Products', href: '/products' },
-  { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
-  { label: 'Account', href: '/account' },
-] as const;
+export default async function CheckoutPage() {
+  const session = await auth()
 
-export default function CheckoutPage() {
-  return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
-      <section className="space-y-2">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Checkout is not wired yet</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          The checkout flow is a scaffold placeholder in this PR. The follow-on wiring PR connects
-          it to the Acme Payments payment API and to the authenticated shopper's saved cards.
-        </p>
-      </section>
+  // Redirect to the AIC bravo realm login if there is no active session or if
+  // the bravo access_token is missing (e.g. misconfigured jwt callback).
+  // Using the same accessToken guard as the proxy route ensures the page only
+  // renders when a valid Bearer token is available for the wallet fetch and
+  // subsequent form submission.
+  if (!session?.accessToken) {
+    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/checkout'))
+  }
 
-      <section className="mt-8 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Web checkout</CardTitle>
-            <CardDescription>Standard merchant funnel.</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Shoppers arriving here via the products / cart routes go through the merchant's own
-            checkout form. Not wired in this scaffold.
-          </CardContent>
-        </Card>
+  const userId = session.userId ?? ''
+  const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Chatbot-initiated checkout</CardTitle>
-            <CardDescription>Human-in-the-loop, per FR 12.</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Shoppers who ask the Acme Assist overlay to purchase see the disabled{' '}
-            <code className="rounded bg-muted px-1">Confirm &amp; pay</code> consent slot in the
-            chat panel. The follow-on wiring PR enables the button and drives payment through the
-            same payment API.
-          </CardContent>
-        </Card>
-      </section>
-    </AppShell>
-  );
+  // Exchange the bravo access_token for an alpha realm token so the wallet
+  // fetch is accepted by payment-api (which validates against the alpha realm
+  // JWKS only). Best-effort: if the exchange fails the page renders with an
+  // empty wallet list and CheckoutForm shows a "no saved cards" message.
+  let alphaToken = ''
+  try {
+    alphaToken = await getAlphaToken(session.accessToken ?? '', session.user)
+  } catch {
+    // Non-blocking — wallet fetch below will return 401 → empty walletCards.
+  }
+
+  // ── Wallet fetch (best-effort) ───────────────────────────────────────────
+  // Non-blocking: if the payment-api is unavailable the checkout page renders
+  // with an empty wallet list and CheckoutForm shows a "no saved cards" message.
+  let walletCards: WalletCard[] = []
+  try {
+    const res = await fetch(
+      `${baseUrl}/api/wallet?userId=${encodeURIComponent(userId)}`,
+      { headers: { Authorization: `Bearer ${alphaToken}` }, cache: 'no-store' },
+    )
+    if (res.ok) {
+      walletCards = (await res.json()) as WalletCard[]
+    }
+  } catch {
+    // Non-blocking — CheckoutForm will display "no saved cards on file".
+  }
+
+  return <CheckoutForm walletCards={walletCards} userId={userId} />
 }

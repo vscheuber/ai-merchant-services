@@ -21,6 +21,12 @@ export type {
 export type { LoyaltyBalance, LoyaltyTier } from './types/loyalty';
 export { deriveLoyaltyTier } from './types/loyalty';
 export type { MerchantIdentity, PaymentIdentity } from './types/identity';
+export type { CheckoutSession, CheckoutSessionStatus } from './types/checkout';
+export type { ChatMessage, ChatRequest, ChatResponse, ProposedPurchase } from './types/chat';
+export type {
+  TokenExchangeRequest,
+  TokenExchangeResponse,
+} from './types/token-exchange';
 
 export { DATA_DIR, dataPath } from './data/paths';
 export type { DataFileName } from './data/paths';

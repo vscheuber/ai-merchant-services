@@ -8,6 +8,7 @@ import type {
   OAuth2ClientPayload,
   AIAgentPayload,
   TrustedJwtIssuerPayload,
+  BravoUser,
   ActionRecord,
   ResourceType,
   RunSummary,
@@ -42,6 +43,10 @@ function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
 
 function loadBravoOAuth2Clients(): OAuth2ClientPayload[] {
   return loadJson<OAuth2ClientPayload[]>('inputs/bravo/oauth2-clients.json');
+}
+
+function loadBravoUsers(): BravoUser[] {
+  return loadJson<BravoUser[]>('../../data/users.json');
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +246,57 @@ async function upsertAIAgent(
   }
 }
 
+async function upsertBravoUser(
+  user: BravoUser,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+  userPassword: string,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'BravoUser';
+  const userId = user.id;
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: userId };
+  }
+  // Base profile fields shared by create and update.
+  const moBase = {
+    userName: user.userName,
+    mail: user.email,
+    givenName: user.givenName,
+    sn: user.sn,
+    merchantId: user.merchantId,
+  };
+  try {
+    // Try to read the existing managed object by _id
+    try {
+      await instance.idm.managed.readManagedObject('bravo_user', userId);
+    } catch {
+      // Does not exist — create it (include password only on initial creation).
+      const moCreate = { ...moBase, userPassword };
+      await instance.idm.managed.createManagedObject(
+        'bravo_user',
+        moCreate as Parameters<typeof instance.idm.managed.createManagedObject>[1],
+        userId,
+      );
+      console.log(`[${realm}] BravoUser created: ${userId} (${user.userName})`);
+      return { action: 'created', resourceType, realm, id: userId };
+    }
+    // Exists — update profile fields only; skip password to prevent accidental
+    // credential resets after initial provisioning.
+    await instance.idm.managed.updateManagedObject(
+      'bravo_user',
+      userId,
+      moBase as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+    );
+    console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
+    return { action: 'updated', resourceType, realm, id: userId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[${realm}] BravoUser skipped (${userId}): ${msg}`);
+    return { action: 'skipped', resourceType, realm, id: userId, error: msg };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main provision function
 // ---------------------------------------------------------------------------
@@ -269,6 +325,7 @@ export async function provision(
   const alphaAgents = loadAlphaAIAgents();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
   const bravoClients = loadBravoOAuth2Clients();
+  const bravoUsers = loadBravoUsers();
 
   // Create frodo instances
   const alphaInstance = frodo.createInstanceWithServiceAccount(
@@ -289,6 +346,22 @@ export async function provision(
     await alphaInstance.login.getTokens();
     await bravoInstance.login.getTokens();
   }
+
+  // Resolve the password used when creating bravo demo users. Source it from
+  // BRAVO_USER_DEFAULT_PASSWORD so credentials are not committed in source.
+  // Fall back to the built-in default only if the env var is absent, and emit
+  // a clear warning so operators know they are using the fallback value.
+  const bravoUserPassword = (() => {
+    const pw = process.env['BRAVO_USER_DEFAULT_PASSWORD'];
+    if (!pw) {
+      console.warn(
+        '[provision] WARNING: BRAVO_USER_DEFAULT_PASSWORD is not set. ' +
+        'Using built-in fallback password for bravo user creation. ' +
+        'Set this env var (see config/aic/.env.example) to avoid credentials in source.',
+      );
+    }
+    return pw ?? 'Br@vo1234!';
+  })();
 
   const actions: ActionRecord[] = [];
 
@@ -325,6 +398,13 @@ export async function provision(
     if (!id) continue;
     actions.push(
       await upsertOAuth2Client(id, client, bravoInstance, '/bravo', dryRun),
+    );
+  }
+
+  // Bravo Users
+  for (const user of bravoUsers) {
+    actions.push(
+      await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword),
     );
   }
 

@@ -13,3 +13,9 @@ export type {
 export type { LoyaltyBalance, LoyaltyTier } from './loyalty';
 export { deriveLoyaltyTier } from './loyalty';
 export type { MerchantIdentity, PaymentIdentity } from './identity';
+export type { CheckoutSession, CheckoutSessionStatus } from './checkout';
+export type { ChatMessage, ChatRequest, ChatResponse, ProposedPurchase } from './chat';
+export type {
+  TokenExchangeRequest,
+  TokenExchangeResponse,
+} from './token-exchange';
