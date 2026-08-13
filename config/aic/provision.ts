@@ -251,40 +251,42 @@ async function upsertBravoUser(
   instance: FrodoInstance,
   realm: string,
   dryRun: boolean,
+  userPassword: string,
 ): Promise<ActionRecord> {
   const resourceType: ResourceType = 'BravoUser';
   const userId = user.id;
   if (dryRun) {
     return { action: 'dry-run', resourceType, realm, id: userId };
   }
-  // Build the managed object payload (bravo_user shape)
-  const moData = {
+  // Base profile fields shared by create and update.
+  const moBase = {
     userName: user.userName,
     mail: user.email,
     givenName: user.givenName,
     sn: user.sn,
     merchantId: user.merchantId,
-    userPassword: 'Br@vo1234!',
   };
   try {
     // Try to read the existing managed object by _id
     try {
       await instance.idm.managed.readManagedObject('bravo_user', userId);
     } catch {
-      // Does not exist — create it
+      // Does not exist — create it (include password only on initial creation).
+      const moCreate = { ...moBase, userPassword };
       await instance.idm.managed.createManagedObject(
         'bravo_user',
-        moData as Parameters<typeof instance.idm.managed.createManagedObject>[1],
+        moCreate as Parameters<typeof instance.idm.managed.createManagedObject>[1],
         userId,
       );
       console.log(`[${realm}] BravoUser created: ${userId} (${user.userName})`);
       return { action: 'created', resourceType, realm, id: userId };
     }
-    // Exists — update it
+    // Exists — update profile fields only; skip password to prevent accidental
+    // credential resets after initial provisioning.
     await instance.idm.managed.updateManagedObject(
       'bravo_user',
       userId,
-      moData as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+      moBase as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
     );
     console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
     return { action: 'updated', resourceType, realm, id: userId };
@@ -345,6 +347,22 @@ export async function provision(
     await bravoInstance.login.getTokens();
   }
 
+  // Resolve the password used when creating bravo demo users. Source it from
+  // BRAVO_USER_DEFAULT_PASSWORD so credentials are not committed in source.
+  // Fall back to the built-in default only if the env var is absent, and emit
+  // a clear warning so operators know they are using the fallback value.
+  const bravoUserPassword = (() => {
+    const pw = process.env['BRAVO_USER_DEFAULT_PASSWORD'];
+    if (!pw) {
+      console.warn(
+        '[provision] WARNING: BRAVO_USER_DEFAULT_PASSWORD is not set. ' +
+        'Using built-in fallback password for bravo user creation. ' +
+        'Set this env var (see config/aic/.env.example) to avoid credentials in source.',
+      );
+    }
+    return pw ?? 'Br@vo1234!';
+  })();
+
   const actions: ActionRecord[] = [];
 
   // Alpha OAuth2Clients
@@ -386,7 +404,7 @@ export async function provision(
   // Bravo Users
   for (const user of bravoUsers) {
     actions.push(
-      await upsertBravoUser(user, bravoInstance, '/bravo', dryRun),
+      await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword),
     );
   }
 
