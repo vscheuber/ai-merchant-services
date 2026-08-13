@@ -1,42 +1,105 @@
-// Placeholder Users route for payment-admin-web. Renders a stub inside the
-// shared `AppShell`. No fetches to `payment-api` — the follow-on wiring PR
-// pulls the users list from the payment IDP's `alpha_user` records.
+// Users page for payment-admin-web.
+//
+// Requires an authenticated Auth.js session (alpha realm). Fetches all users
+// from payment-api /api/users using the session's alpha access_token as a
+// Bearer token. Unauthenticated visitors are redirected to the AIC alpha
+// realm login page.
 //
 // Next.js App Router requires a default export.
 
-import { AppShell, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@acme/ui';
+import { redirect } from 'next/navigation'
+import type { MerchantIdentity } from '@acme/shared'
+import {
+  AppShell,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@acme/ui'
+import { auth } from '../../auth'
 
 const nav = [
   { label: 'Transactions', href: '/transactions' },
   { label: 'Users', href: '/users' },
   { label: 'Merchants', href: '/merchants' },
-] as const;
+] as const
 
-export default function UsersPage() {
+export default async function UsersPage() {
+  const session = await auth()
+
+  // Redirect to the AIC alpha realm login if there is no active session.
+  if (!session) {
+    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/users'))
+  }
+
+  const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
+  let users: MerchantIdentity[] = []
+  let fetchError: string | null = null
+
+  try {
+    const res = await fetch(`${baseUrl}/api/users`, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken ?? ''}`,
+      },
+      cache: 'no-store',
+    })
+    if (res.ok) {
+      users = (await res.json()) as MerchantIdentity[]
+    } else {
+      fetchError = `Unable to load users (HTTP ${res.status.toString()}).`
+    }
+  } catch {
+    fetchError = 'Unable to connect to the payment API. Please try again later.'
+  }
+
   return (
     <AppShell brand="Acme Payments Admin" tagline="Internal dashboard" nav={nav}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Users</p>
         <h1 className="text-3xl font-semibold tracking-tight">Payment-side identity registry</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Placeholder for the users list. The follow-on wiring PR reads records from the payment
-          IDP (Acme Payments &apos;/alpha&apos; realm, managed/alpha_user) and shows JIT-provisioning
-          status.
+          All users from the payment API seed data.
         </p>
       </section>
 
       <section className="mt-8">
-        <Card className="max-w-2xl">
-          <CardHeader>
-            <CardTitle>Coming soon</CardTitle>
-            <CardDescription>Users list is not wired in this scaffold.</CardDescription>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            When the token-exchange + JIT-provisioning flow lands, this view lists every payment-side
-            identity along with which merchant realm it was provisioned from.
-          </CardContent>
-        </Card>
+        {fetchError != null ? (
+          <p className="text-sm text-destructive">{fetchError}</p>
+        ) : users.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No users found.</p>
+        ) : (
+          <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {users.map((user) => (
+              <li key={user.id}>
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle>
+                      {user.givenName} {user.sn}
+                    </CardTitle>
+                    <CardDescription>
+                      <code className="rounded bg-muted px-1">{user.userName}</code>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm text-muted-foreground">
+                    <p>
+                      <span className="font-medium text-foreground">ID:</span>{' '}
+                      <code className="rounded bg-muted px-1">{user.id}</code>
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Email:</span> {user.email}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Merchant:</span>{' '}
+                      <code className="rounded bg-muted px-1">{user.merchantId}</code>
+                    </p>
+                  </CardContent>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </AppShell>
-  );
+  )
 }
