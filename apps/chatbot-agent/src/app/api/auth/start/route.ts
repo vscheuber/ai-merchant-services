@@ -38,7 +38,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const codeChallenge = toBase64Url(new Uint8Array(hashBuffer));
 
   // 4. Store state + codeVerifier in the module-level PKCE map.
-  const returnOrigin = request.headers.get('Origin') ?? '';
+  const returnOrigin = request.headers.get('Origin') ?? '*';
   pkceState.set(state, { codeVerifier, returnOrigin });
 
   // 5. Build authorization URL.

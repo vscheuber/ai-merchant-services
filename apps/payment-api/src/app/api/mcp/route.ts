@@ -46,7 +46,7 @@ const CartSchema = z.object({
 
 const ConsentSchema = z.object({
   source: z.enum(['chatbot', 'web-checkout']),
-  confirmedAt: z.string(),
+  confirmedAt: z.string().min(1),
 });
 
 // ---------------------------------------------------------------------------

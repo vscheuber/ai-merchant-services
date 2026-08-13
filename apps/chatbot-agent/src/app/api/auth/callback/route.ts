@@ -13,26 +13,17 @@
 import { getAlphaToken } from '../../../../lib/alpha-token';
 import { pkceState } from '../../../../lib/pkce-state';
 
-// ── XSS-safe HTML escaping ────────────────────────────────────────────────────
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 // ── HTML page builders ────────────────────────────────────────────────────────
+//
+// JSON.stringify is used for all values embedded in JS string contexts.
+// This correctly escapes newlines, backslashes, quotes, and all other
+// characters that would break a JavaScript string literal.
 
 function errorPage(errorValue: string, origin: string): string {
-  const safeError = escapeHtml(errorValue);
-  const safeOrigin = escapeHtml(origin);
   return `<!DOCTYPE html><html><body><script>
 (function(){
-  var msg = { type: 'chatbot-error', error: '${safeError}' };
-  var origin = '${safeOrigin}';
+  var msg = { type: 'chatbot-error', error: ${JSON.stringify(errorValue)} };
+  var origin = ${JSON.stringify(origin || '*')};
   if (window.opener && window.opener !== window) {
     window.opener.postMessage(msg, origin);
     window.close();
@@ -40,16 +31,14 @@ function errorPage(errorValue: string, origin: string): string {
     window.parent.postMessage(msg, origin);
   }
 })();
-</script></body></html>`;
+<\/script></body></html>`;
 }
 
 function successPage(alphaToken: string, origin: string): string {
-  const safeToken = escapeHtml(alphaToken);
-  const safeOrigin = escapeHtml(origin);
   return `<!DOCTYPE html><html><body><script>
 (function(){
-  var msg = { type: 'chatbot-token', accessToken: '${safeToken}' };
-  var origin = '${safeOrigin}';
+  var msg = { type: 'chatbot-token', accessToken: ${JSON.stringify(alphaToken)} };
+  var origin = ${JSON.stringify(origin || '*')};
   if (window.opener && window.opener !== window) {
     window.opener.postMessage(msg, origin);
     window.close();
@@ -57,7 +46,7 @@ function successPage(alphaToken: string, origin: string): string {
     window.parent.postMessage(msg, origin);
   }
 })();
-</script></body></html>`;
+<\/script></body></html>`;
 }
 
 function badStatePage(): string {
@@ -71,7 +60,7 @@ function badStatePage(): string {
     window.parent.postMessage(msg, '*');
   }
 })();
-</script></body></html>`;
+<\/script></body></html>`;
 }
 
 const HTML_HEADERS = { 'Content-Type': 'text/html' };

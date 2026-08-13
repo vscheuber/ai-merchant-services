@@ -14,7 +14,7 @@ export async function getAlphaToken(
   const bffUrl = process.env['CHATBOT_AGENT_BFF_URL'];
   if (!bffUrl) throw new Error('CHATBOT_AGENT_BFF_URL environment variable is not set');
 
-  const res = await fetch(`${bffUrl}/api/auth/exchange`, {
+  const res = await fetch(`${bffUrl.replace(/\/$/, '')}/api/auth/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ bravoToken }),

@@ -10,9 +10,10 @@
  * ChatShell in `@acme/ui` but does NOT import from `@acme/ui` — a <script>-tag
  * embed cannot ES-import from a workspace package at runtime.
  *
- * Interactive behaviour (Task 11):
- *   - On open: fetches a short-lived alpha realm token from the merchant-web
- *     token proxy (`GET /api/chatbot/token`). 401 → shows "Please sign in".
+ * Interactive behaviour:
+ *   - On open: obtains an access token via OIDC PKCE popup (default) or silent
+ *     iframe (`data-auth-mode="silent"`). On 401 from /api/chat, transparently
+ *     re-authenticates via silent iframe then falls back to PKCE popup.
  *   - Send button + Enter key: posts `{ messages, accessToken }` to the
  *     chatbot-agent `/api/chat` endpoint and renders the assistant response.
  *   - "Confirm & pay" button becomes active when the chatbot proposes a purchase
@@ -455,6 +456,7 @@
           var popupCheckInterval = setInterval(function () {
             if (popup.closed) {
               clearInterval(popupCheckInterval);
+              window.removeEventListener('message', pkceHandler);
               tokenFetching = false;
             }
           }, 500);
@@ -761,10 +763,21 @@
       }),
     })
       .then(function (res) {
+        if (res.status === 401) {
+          // Token expired between proposal and confirmation click.
+          // Clear the stale token and re-enable the confirm button so the
+          // user can sign in again and retry without losing the purchase.
+          accessToken = null;
+          var confirmBtn = activeConsentBtn;
+          if (confirmBtn) confirmBtn.disabled = false;
+          fetchAccessToken();
+          return null;
+        }
         if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
         return res.json();
       })
       .then(function (data) {
+        if (data === null) return; // 401 branch — already handled above
         var content =
           data && data.message && typeof data.message.content === 'string'
             ? data.message.content
@@ -806,7 +819,7 @@
           },
         },
         [
-          h('span', { text: '\u{1F4AC}', style: { fontSize: '16px' } }),
+          h('span', { text: '💬', style: { fontSize: '16px' } }),
           h('span', { text: 'Chat with Acme Assist' }),
         ],
       );

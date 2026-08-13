@@ -1,7 +1,8 @@
 /**
  * RFC 8693 token exchange request and response types.
  *
- * Used by `merchant-web`'s `/api/chatbot/token` proxy (Step 1: bravo → alpha)
+ * Used by `merchant-web`'s server-side proxy which delegates to
+ * `chatbot-agent`'s `/api/auth/exchange` endpoint (Step 1: bravo → alpha)
  * and `chatbot-agent`'s `/api/chat` route (Step 2: alpha user → agent token).
  *
  * Named exports only per repo convention.
