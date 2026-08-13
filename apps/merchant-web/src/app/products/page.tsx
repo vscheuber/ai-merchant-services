@@ -1,9 +1,11 @@
 // Products page — requires an authenticated Auth.js session.
 //
-// Fetches the Northwind product catalog from payment-api using the bravo
-// access_token from the server-side session as a Bearer token. The product
-// array is passed to the client-side ProductGrid component so "Add to cart"
-// buttons can interact with the CartProvider context from the root layout.
+// Fetches the Northwind product catalog from payment-api. The bravo
+// access_token from the Auth.js session is first exchanged for an alpha
+// realm token (via getAlphaToken) because payment-api only accepts alpha
+// realm Bearer tokens. The product array is passed to the client-side
+// ProductGrid component so "Add to cart" buttons can interact with the
+// CartProvider context from the root layout.
 //
 // If the payment-api is unreachable, an error message is rendered rather than
 // crashing — the session guard still fires so the user stays authenticated.
@@ -14,6 +16,7 @@ import { redirect } from 'next/navigation'
 import type { Product } from '@acme/shared'
 import { AppShell } from '@acme/ui'
 import { auth } from '../../auth'
+import { getAlphaToken } from '../../lib/alpha-token'
 import { ProductGrid } from '../../components/product-grid'
 
 const nav = [
@@ -35,12 +38,22 @@ export default async function ProductsPage() {
   let products: Product[] = []
   let fetchError: string | null = null
 
+  // Exchange the bravo access_token for an alpha token required by payment-api.
+  // If the exchange fails (e.g. AIC not configured) we fall through with an
+  // empty token — the products fetch will return a 401 and show an error.
+  let alphaToken = ''
+  try {
+    alphaToken = await getAlphaToken(session.accessToken ?? '', session.user)
+  } catch {
+    // Non-blocking — fetch below handles non-OK responses gracefully.
+  }
+
   try {
     const res = await fetch(
       `${baseUrl}/api/products?merchantId=mrch_northwind`,
       {
         headers: {
-          Authorization: `Bearer ${session.accessToken ?? ''}`,
+          Authorization: `Bearer ${alphaToken}`,
         },
         // Never cache — product stock can change between requests.
         cache: 'no-store',

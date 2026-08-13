@@ -1,9 +1,11 @@
 // Account page — requires an authenticated Auth.js session.
 //
-// Fetches live loyalty and wallet data from payment-api using the bravo
-// access_token from the server-side session as a Bearer token. Both fetches
-// are non-blocking: if the payment-api is unavailable the page renders with
-// a graceful "unavailable" fallback rather than crashing.
+// Fetches live loyalty and wallet data from payment-api. Before making those
+// calls the server exchanges the bravo access_token from the Auth.js session
+// for an alpha realm token (via getAlphaToken), because payment-api only
+// accepts alpha realm Bearer tokens. Both fetches are best-effort: if the
+// exchange or the payment-api call fails the page renders with graceful
+// "unavailable" fallbacks rather than crashing.
 //
 // The OIDC subject identifier (session.userId — the AIC bravo_user _id, e.g.
 // "user_ada") is used as the payment-api userId parameter.
@@ -14,6 +16,7 @@ import { redirect } from 'next/navigation'
 import type { LoyaltyBalance, Merchant, WalletCard } from '@acme/shared'
 import { AppShell, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@acme/ui'
 import { auth } from '../../auth'
+import { getAlphaToken } from '../../lib/alpha-token'
 
 const nav = [
   { label: 'Products', href: '/products' },
@@ -56,8 +59,18 @@ export default async function AccountPage() {
 
   const userName = session.user?.name ?? '—'
   const userId = session.userId ?? ''
-  const token = session.accessToken ?? ''
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
+
+  // Exchange the bravo access_token for an alpha token so payment-api calls
+  // are accepted. Both the loyalty and wallet fetches below are best-effort;
+  // if the exchange fails (e.g. AIC not configured in this environment) the
+  // page degrades gracefully with "unavailable" fallbacks.
+  let token = ''
+  try {
+    token = await getAlphaToken(session.accessToken ?? '', session.user)
+  } catch {
+    // Non-blocking — graceful fallbacks are rendered below.
+  }
 
   // ── Loyalty fetch (best-effort) ──────────────────────────────────────────
   let loyalty: LoyaltyBalance | null = null

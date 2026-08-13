@@ -347,17 +347,26 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // Step 2: exchange alpha user token for chatbot-agent agent token.
+    // This is best-effort for the normal chat path — a failure degrades to an
+    // unauthenticated system prompt (no loyalty/wallet context) rather than an
+    // error response, matching the in-code specification at lines 330-332.
+    // The checkout confirmation path checks for agentToken below and returns
+    // 401 if it is absent.
     try {
       agentToken = await exchangeForAgentToken(alphaToken);
     } catch (err) {
-      // Fatal for checkout path; for normal chat, return an error so the client
-      // knows the exchange configuration issue rather than silently degrading.
-      const message = err instanceof Error ? err.message : 'Step 2 token exchange failed.';
-      return NextResponse.json({ error: 'token_exchange_error', message }, { status: 502 });
+      // Non-fatal on the normal chat path: clear agent token and continue with
+      // an unauthenticated system prompt. Log the failure for operator visibility.
+      console.warn(
+        '[chat] Step 2 token exchange failed; continuing with unauthenticated context.',
+        err instanceof Error ? err.message : err,
+      );
+      agentToken = null;
     }
 
     // Fetch shopper context (loyalty + wallet cards) using the agent token.
-    if (userId) {
+    // Only proceed when agentToken is non-null (Step 2 succeeded).
+    if (userId && agentToken) {
       try {
         userCtx = await fetchUserContext(agentToken, userId);
       } catch {

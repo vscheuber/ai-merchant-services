@@ -90,6 +90,18 @@
     "consent": { "source": "chatbot", "confirmedAt": "2026-08-01T10:34:05Z" }
   },
   {
+    "id": "txn_00009",
+    "userId": "user_ada",
+    "merchantId": "mrch_northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 799.0,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-08-05T14:17:33Z",
+    "items": [{ "sku": "NW-PH-X7", "quantity": 1, "unitPrice": 799.0 }],
+    "consent": { "source": "web-checkout", "confirmedAt": "2026-08-05T14:17:10Z" }
+  },
+  {
     "id": "txn_00008",
     "userId": "user_alan",
     "merchantId": "mrch_contoso",

@@ -1,5 +1,6 @@
-// Checkout proxy route — reads the Auth.js session and forwards the
-// checkout request to the payment-api with the bravo access_token as Bearer.
+// Checkout proxy route — reads the Auth.js session, exchanges the bravo
+// access_token for an alpha realm token, and forwards the checkout request
+// to the payment-api using the alpha token as Bearer.
 //
 // POST /api/checkout (merchant-web internal proxy)
 //   Body (from client): { cart: Cart, selectedCardId: string }
@@ -18,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { Cart } from '@acme/shared'
 
 import { auth } from '../../../auth'
+import { getAlphaToken } from '../../../lib/alpha-token'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // --- Auth guard ---
@@ -62,6 +64,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
+  // --- Exchange bravo token for alpha token before calling payment-api ---
+  // payment-api only accepts alpha realm tokens; using the bravo token would
+  // result in HTTP 401 from the payment-api JWT middleware.
+  let alphaToken: string
+  try {
+    alphaToken = await getAlphaToken(session.accessToken, session.user)
+  } catch (err) {
+    console.error('[checkout proxy] Failed to obtain alpha token:', err)
+    return NextResponse.json(
+      { error: 'service_unavailable', message: 'Unable to obtain a payment authorization token.' },
+      { status: 503 },
+    )
+  }
+
   // --- Forward to payment-api with consent set server-side ---
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
 
@@ -83,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.accessToken}`,
+        Authorization: `Bearer ${alphaToken}`,
       },
       body: JSON.stringify(checkoutBody),
     })
