@@ -21,9 +21,12 @@ import { CheckoutForm } from './checkout-form'
 export default async function CheckoutPage() {
   const session = await auth()
 
-  // Redirect to the AIC bravo realm login if there is no active session.
-  // The callbackUrl ensures Auth.js returns the shopper to /checkout after login.
-  if (!session) {
+  // Redirect to the AIC bravo realm login if there is no active session or if
+  // the bravo access_token is missing (e.g. misconfigured jwt callback).
+  // Using the same accessToken guard as the proxy route ensures the page only
+  // renders when a valid Bearer token is available for the wallet fetch and
+  // subsequent form submission.
+  if (!session?.accessToken) {
     redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/checkout'))
   }
 

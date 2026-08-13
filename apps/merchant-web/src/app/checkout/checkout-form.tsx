@@ -113,11 +113,19 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
 
   // ── Success state ─────────────────────────────────────────────────────────
   if (result !== null) {
+    // Derive the heading from the actual status returned by payment-api so the
+    // copy remains correct even if the API returns "declined" or another status
+    // on a 2xx response.
+    const statusHeading =
+      result.status === 'captured'
+        ? 'Payment captured'
+        : `Payment ${result.status}`
+
     return (
       <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Payment captured</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">{statusHeading}</h1>
         </section>
 
         <section className="mt-8 max-w-2xl">
@@ -172,10 +180,12 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
     }
 
     try {
+      // userId is intentionally omitted — the proxy route reads it from the
+      // server-side session to prevent IDOR (client cannot override it).
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cart, userId, selectedCardId }),
+        body: JSON.stringify({ cart, selectedCardId }),
       })
 
       const data = (await res.json()) as Record<string, unknown>
@@ -259,20 +269,30 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
                   </Link>
                 </p>
               ) : (
-                <select
-                  id="card-select"
-                  value={selectedCardId}
-                  onChange={(e) => setSelectedCardId(e.target.value)}
-                  disabled={isSubmitting}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {walletCards.map((card) => (
-                    <option key={card.id} value={card.id}>
-                      {brandLabel(card.brand)} &bull;&bull;&bull;&bull; {card.last4} —{' '}
-                      {card.cardholderName}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1.5">
+                  {/* Explicit <label> associates the heading text with the
+                      <select> so screen readers announce it on focus. */}
+                  <label
+                    htmlFor="card-select"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Select card
+                  </label>
+                  <select
+                    id="card-select"
+                    value={selectedCardId}
+                    onChange={(e) => setSelectedCardId(e.target.value)}
+                    disabled={isSubmitting}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {walletCards.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {brandLabel(card.brand)} &bull;&bull;&bull;&bull; {card.last4} —{' '}
+                        {card.cardholderName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
             </CardContent>
           </Card>

@@ -2,7 +2,9 @@
 // checkout request to the payment-api with the bravo access_token as Bearer.
 //
 // POST /api/checkout (merchant-web internal proxy)
-//   Body (from client): { cart: Cart, userId: string, selectedCardId: string }
+//   Body (from client): { cart: Cart, selectedCardId: string }
+//   userId is taken from the server-side session, NOT the client body, to
+//   prevent IDOR: a malicious client cannot target another user's account.
 //   Adds consent server-side: { source: "web-checkout", confirmedAt: <ISO> }
 //   Forwards to ${PAYMENT_API_BASE_URL}/api/checkout and returns the response as-is.
 //
@@ -27,6 +29,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
+  // userId is taken from the server-side session to prevent IDOR.
+  // Clients cannot override this value by including userId in the body.
+  const userId = session.userId
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'unauthorized', message: 'Session does not include a user identity.' },
+      { status: 401 },
+    )
+  }
+
   // --- Parse request body ---
   let body: Record<string, unknown>
   try {
@@ -38,13 +50,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { cart, userId, selectedCardId } = body
+  const { cart, selectedCardId } = body
 
-  if (!cart || !userId || !selectedCardId) {
+  if (!cart || !selectedCardId) {
     return NextResponse.json(
       {
         error: 'bad_request',
-        message: 'Missing required fields: cart, userId, selectedCardId.',
+        message: 'Missing required fields: cart, selectedCardId.',
       },
       { status: 400 },
     )
@@ -55,7 +67,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const checkoutBody = {
     cart: cart as Cart,
-    userId,
+    userId,          // always from session — never client-supplied
     selectedCardId,
     // Consent source is always "web-checkout" for this proxy route.
     // confirmedAt is the server-side timestamp of the form submission.
@@ -83,6 +95,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const data: unknown = await paymentRes.json()
+  // Guard against non-JSON responses (e.g. 502 HTML from a reverse proxy).
+  // If parsing fails, return a structured 503 rather than letting the
+  // SyntaxError propagate and produce an opaque 500 HTML page.
+  let data: unknown
+  try {
+    data = await paymentRes.json()
+  } catch {
+    console.error('[checkout proxy] payment-api returned a non-JSON body (status', paymentRes.status, ')')
+    return NextResponse.json(
+      { error: 'service_unavailable', message: 'Payment service returned an unexpected response.' },
+      { status: 503 },
+    )
+  }
+
   return NextResponse.json(data, { status: paymentRes.status })
 }
