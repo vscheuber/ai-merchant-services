@@ -1,34 +1,59 @@
 /*
- * Acme Assist — embeddable chat overlay bootstrap.
+ * Acme Assist — interactive chat overlay.
  *
  * Served as a static asset from `/embed.js`. Merchant sites include it via:
  *
  *   <script src="http://localhost:3004/embed.js" async></script>
  *
- * On load it injects a fixed bottom-right chat-shell <div> into
- * `document.body` with inline styles (no external CSS dependency). The
- * markup deliberately mirrors the React ChatShell in `@acme/ui` but does
- * NOT import from `@acme/ui` — a <script>-tag embed cannot ES-import from
- * a workspace package at runtime. A follow-on PR can swap in a real
- * bundler if the JS footprint matters.
+ * On load it injects a fixed bottom-right chat-shell <div> into `document.body`
+ * with inline styles (no external CSS dependency). The markup mirrors the React
+ * ChatShell in `@acme/ui` but does NOT import from `@acme/ui` — a <script>-tag
+ * embed cannot ES-import from a workspace package at runtime.
  *
- * Reserves a structural consent-slot placeholder ("Confirm & pay" button)
- * per FR 12 — human-in-the-loop is mandatory. Disabled/no-op in the
- * scaffold; wiring lands with the checkout flow in a follow-on.
+ * Interactive behaviour (Task 11):
+ *   - On open: fetches a short-lived alpha realm token from the merchant-web
+ *     token proxy (`GET /api/chatbot/token`). 401 → shows "Please sign in".
+ *   - Send button + Enter key: posts `{ messages, accessToken }` to the
+ *     chatbot-agent `/api/chat` endpoint and renders the assistant response.
+ *   - "Confirm & pay" button becomes active when the chatbot proposes a purchase
+ *     (`proposedPurchase` in the response). Clicking it sends a confirmation
+ *     request with `confirmedAt` and displays the checkout result.
  *
- * No auth, no LLM client, no external network calls. Named-export ESLint rule
- * does not apply to this file (public/*.js is served as a static asset;
- * it is not a source module).
+ * No ESM imports. Named-export ESLint rule does not apply (public static asset).
  */
 (function () {
   'use strict';
 
   var MOUNT_ID = 'acme-assist-overlay-root';
+  var TOKEN_URL = 'http://localhost:3000/api/chatbot/token';
+  var CHAT_URL = 'http://localhost:3004/api/chat';
 
-  // If two script tags accidentally include this bundle, do not mount twice.
+  // ── Module-level state ─────────────────────────────────────────────────────
+  // Preserved across open/close cycles so conversation is not lost on minimise.
+
+  /** Alpha realm access token; null until the token proxy call succeeds. */
+  var accessToken = null;
+
+  /** True while a token fetch is in-flight — prevents duplicate requests. */
+  var tokenFetching = false;
+
+  /** Ordered conversation turns for the LLM (system turns excluded). */
+  var messageHistory = []; // { role: 'user'|'assistant', content: string }[]
+
+  /** Purchase proposed by the chatbot in the most recent turn; awaiting confirmation. */
+  var pendingProposedPurchase = null;
+
+  // Active DOM references — updated each time the open panel is rendered.
+  // Async callbacks use these to mutate the live panel without a full rebuild.
+  var activeBubbleList = null;
+  var activeConsentBtn = null;
+  var activeTextarea = null;
+
+  // ── Guard ──────────────────────────────────────────────────────────────────
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   if (document.getElementById(MOUNT_ID)) return;
 
+  // ── DOM helper ─────────────────────────────────────────────────────────────
   function h(tag, attrs, children) {
     var el = document.createElement(tag);
     if (attrs) {
@@ -63,9 +88,8 @@
     return el;
   }
 
-  // Base container: fixed to the bottom-right corner of the viewport. Inline
-  // styles keep the bundle self-contained so it renders identically on any
-  // merchant host page regardless of its CSS.
+  // ── Styles ─────────────────────────────────────────────────────────────────
+
   var containerStyle = {
     position: 'fixed',
     bottom: '16px',
@@ -131,6 +155,92 @@
     gap: '12px',
   };
 
+  var composerStyle = {
+    borderTop: '1px solid #e2e8f0',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  };
+
+  // Textarea sits inside a flex row alongside the send button — flex: '1 1 auto'
+  // lets it expand while the send button stays fixed-width.
+  var inputStyle = {
+    flex: '1 1 auto',
+    minWidth: '0',
+    resize: 'none',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    border: '1px solid #cbd5e1',
+    background: '#ffffff',
+    color: '#0f172a',
+    fontSize: '14px',
+    lineHeight: '1.35',
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit',
+  };
+
+  var sendBtnStyle = {
+    flexShrink: '0',
+    alignSelf: 'flex-end',
+    padding: '8px 14px',
+    borderRadius: '6px',
+    border: '0',
+    background: '#0f172a',
+    color: '#f8fafc',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
+  };
+
+  // Consent button — disabled state (no proposed purchase pending).
+  var consentBtnDisabledStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    border: '0',
+    background: '#94a3b8',
+    color: '#f8fafc',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'not-allowed',
+    opacity: '0.7',
+  };
+
+  // Consent button — active state (proposed purchase is ready for confirmation).
+  var consentBtnActiveStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    border: '0',
+    background: '#0f172a',
+    color: '#f8fafc',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    opacity: '1',
+  };
+
+  var launcherStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 16px',
+    borderRadius: '999px',
+    border: '0',
+    background: '#0f172a',
+    color: '#f8fafc',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    boxShadow: '0 12px 24px -8px rgba(15, 23, 42, 0.35)',
+    fontFamily: 'inherit',
+  };
+
+  // ── Bubble builder ─────────────────────────────────────────────────────────
   function bubble(role, text) {
     var isUser = role === 'user';
     return h(
@@ -162,60 +272,233 @@
     );
   }
 
-  var composerStyle = {
-    borderTop: '1px solid #e2e8f0',
-    padding: '12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  };
+  // ── DOM mutation helpers ───────────────────────────────────────────────────
 
-  var inputStyle = {
-    width: '100%',
-    resize: 'none',
-    padding: '8px 12px',
-    borderRadius: '6px',
-    border: '1px solid #cbd5e1',
-    background: '#ffffff',
-    color: '#0f172a',
-    fontSize: '14px',
-    lineHeight: '1.35',
-    outline: 'none',
-    boxSizing: 'border-box',
-    fontFamily: 'inherit',
-  };
+  /**
+   * Append a chat bubble to the active message list and scroll it into view.
+   * No-ops silently when the panel is closed (activeBubbleList is null or detached).
+   * Returns the created <li> element so callers can remove it (e.g. loading dots).
+   */
+  function appendBubble(role, text) {
+    if (!activeBubbleList) return null;
+    var b = bubble(role, text);
+    activeBubbleList.appendChild(b);
+    activeBubbleList.scrollTop = activeBubbleList.scrollHeight;
+    return b;
+  }
 
-  // Consent-slot placeholder per FR 12 — disabled/no-op in the scaffold.
-  var consentBtnStyle = {
-    width: '100%',
-    padding: '8px 12px',
-    borderRadius: '6px',
-    border: '0',
-    background: '#94a3b8',
-    color: '#f8fafc',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'not-allowed',
-    opacity: '0.7',
-  };
+  /**
+   * Update the consent button label and enabled/disabled state to reflect the
+   * given proposed purchase. Pass null to clear the proposal and disable the button.
+   */
+  function setConsentButtonState(purchase) {
+    pendingProposedPurchase = purchase;
+    if (!activeConsentBtn) return;
 
-  // Closed-state pill (launcher).
-  var launcherStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 16px',
-    borderRadius: '999px',
-    border: '0',
-    background: '#0f172a',
-    color: '#f8fafc',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    boxShadow: '0 12px 24px -8px rgba(15, 23, 42, 0.35)',
-    fontFamily: 'inherit',
-  };
+    var targetStyle = purchase ? consentBtnActiveStyle : consentBtnDisabledStyle;
+    for (var k in targetStyle) {
+      if (Object.prototype.hasOwnProperty.call(targetStyle, k)) {
+        activeConsentBtn.style[k] = targetStyle[k];
+      }
+    }
 
+    if (purchase) {
+      var qty = purchase.quantity > 1 ? ' × ' + String(purchase.quantity) : '';
+      activeConsentBtn.textContent =
+        'Confirm & pay: ' +
+        purchase.productName +
+        ' — $' +
+        purchase.unitPrice.toFixed(2) +
+        qty;
+      activeConsentBtn.removeAttribute('disabled');
+      activeConsentBtn.setAttribute('aria-disabled', 'false');
+    } else {
+      activeConsentBtn.textContent = 'Confirm & pay';
+      activeConsentBtn.setAttribute('disabled', '');
+      activeConsentBtn.setAttribute('aria-disabled', 'true');
+    }
+  }
+
+  // ── Re-enable input ────────────────────────────────────────────────────────
+
+  /** Remove the readonly guard from the textarea once an async operation completes. */
+  function reenableInput() {
+    if (activeTextarea && accessToken) {
+      activeTextarea.removeAttribute('readonly');
+    }
+  }
+
+  // ── Token fetch ────────────────────────────────────────────────────────────
+
+  /**
+   * Fetch a short-lived alpha realm access token from the merchant-web token
+   * proxy (`GET /api/chatbot/token`).
+   *
+   * On HTTP 401: appends a "please sign in" assistant bubble; textarea stays
+   * read-only so the shopper cannot send messages.
+   * On success: stores the token in `accessToken` and removes the readonly guard
+   * from the textarea, enabling the shopper to start typing.
+   */
+  function fetchAccessToken() {
+    if (tokenFetching) return;
+    tokenFetching = true;
+
+    fetch(TOKEN_URL)
+      .then(function (res) {
+        if (res.status === 401) {
+          appendBubble(
+            'assistant',
+            'Please sign in to use Acme Assist. Visit your account page to log in, then refresh this page.',
+          );
+          return null;
+        }
+        if (!res.ok) {
+          appendBubble(
+            'assistant',
+            'Unable to start a session. Please refresh the page and try again.',
+          );
+          return null;
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        accessToken = data.accessToken;
+        if (activeTextarea) {
+          activeTextarea.removeAttribute('readonly');
+          activeTextarea.focus();
+        }
+      })
+      .catch(function () {
+        appendBubble(
+          'assistant',
+          'Unable to connect to Acme Assist. Please refresh the page and try again.',
+        );
+      })
+      .then(function () {
+        // Runs after both success and error branches — simulates Promise.finally.
+        tokenFetching = false;
+      });
+  }
+
+  // ── Send handler ───────────────────────────────────────────────────────────
+
+  /**
+   * Append a user bubble, POST the conversation to `/api/chat`, then render the
+   * assistant response. Activates the consent button when `proposedPurchase` is
+   * present in the response.
+   */
+  function sendMessage(text) {
+    text = String(text).trim();
+    if (!text || !accessToken) return;
+
+    // Optimistically render and record the user's message.
+    appendBubble('user', text);
+    messageHistory.push({ role: 'user', content: text });
+
+    // Lock the textarea while waiting for the server response.
+    if (activeTextarea) {
+      activeTextarea.value = '';
+      activeTextarea.setAttribute('readonly', '');
+    }
+
+    // Temporary loading indicator — removed when the response arrives.
+    var loadingEl = appendBubble('assistant', '…');
+
+    fetch(CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: messageHistory, accessToken: accessToken }),
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
+        return res.json();
+      })
+      .then(function (data) {
+        if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+
+        var content =
+          data && data.message && typeof data.message.content === 'string'
+            ? data.message.content
+            : '';
+        if (!content) content = 'Sorry, I could not generate a response. Please try again.';
+
+        appendBubble('assistant', content);
+        messageHistory.push({ role: 'assistant', content: content });
+
+        if (data && data.proposedPurchase) {
+          setConsentButtonState(data.proposedPurchase);
+        }
+
+        reenableInput();
+      })
+      .catch(function () {
+        if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+        appendBubble('assistant', 'Sorry, something went wrong. Please try again.');
+        reenableInput();
+      });
+  }
+
+  // ── Confirm & pay handler ──────────────────────────────────────────────────
+
+  /**
+   * POST a checkout confirmation to `/api/chat` with `confirmedAt` and the
+   * pending proposed purchase. Renders the checkout result (captured / declined)
+   * as an assistant bubble.
+   *
+   * The button is disabled immediately on click to prevent double-submission.
+   * No checkout call is made without an explicit button click (FR 14 / human-in-the-loop).
+   */
+  function confirmAndPay() {
+    if (!pendingProposedPurchase || !accessToken) return;
+
+    var purchase = pendingProposedPurchase;
+    var confirmedAt = new Date().toISOString();
+
+    // Immediately disable consent button and lock textarea to prevent re-submission.
+    setConsentButtonState(null);
+    if (activeTextarea) activeTextarea.setAttribute('readonly', '');
+
+    fetch(CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: messageHistory,
+        accessToken: accessToken,
+        confirmedAt: confirmedAt,
+        proposedPurchase: purchase,
+      }),
+    })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        var content =
+          data && data.message && typeof data.message.content === 'string'
+            ? data.message.content
+            : 'Your purchase has been processed.';
+        appendBubble('assistant', content);
+        messageHistory.push({ role: 'assistant', content: content });
+        reenableInput();
+      })
+      .catch(function () {
+        appendBubble('assistant', 'Payment could not be processed. Please try again.');
+        reenableInput();
+      });
+  }
+
+  // ── Build panel ────────────────────────────────────────────────────────────
+
+  /**
+   * Build (or rebuild) the overlay root element.
+   *
+   * `open = false` → compact launcher pill.
+   * `open = true`  → full chat panel with send handler, consent button, and
+   *                   conversation history replayed from `messageHistory`.
+   *
+   * Active DOM refs (`activeBubbleList`, `activeConsentBtn`, `activeTextarea`)
+   * are updated here so that async callbacks always target the live panel.
+   */
   function build(open) {
     var root = h('div', { id: MOUNT_ID, 'data-acme-assist': 'overlay', style: containerStyle });
 
@@ -239,6 +522,95 @@
       return root;
     }
 
+    // ── Message list ──────────────────────────────────────────────────────────
+    // Always starts with the welcome bubble; history is replayed beneath it.
+    var listEl = h('ol', { style: listStyle }, [
+      bubble(
+        'assistant',
+        "Hi! I'm Acme Assist. I can help you find products, check your loyalty balance, and complete purchases with your saved cards.",
+      ),
+    ]);
+    activeBubbleList = listEl;
+
+    // Replay stored conversation into the freshly built list.
+    for (var i = 0; i < messageHistory.length; i += 1) {
+      var m = messageHistory[i];
+      listEl.appendChild(bubble(m.role, m.content));
+    }
+    // Scroll to the bottom after replaying history.
+    listEl.scrollTop = listEl.scrollHeight;
+
+    // ── Textarea ──────────────────────────────────────────────────────────────
+    // Starts read-only; the readonly guard is lifted after `fetchAccessToken`
+    // confirms the user is signed in and returns a valid token.
+    var textarea = h('textarea', {
+      rows: '2',
+      placeholder: 'Type a message...',
+      readonly: !accessToken,
+      'aria-label': 'Message Acme Assist',
+      style: inputStyle,
+    });
+    activeTextarea = textarea;
+
+    textarea.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!textarea.hasAttribute('readonly')) {
+          sendMessage(textarea.value);
+        }
+      }
+    });
+
+    // ── Send button ───────────────────────────────────────────────────────────
+    var sendBtn = h(
+      'button',
+      {
+        type: 'button',
+        style: sendBtnStyle,
+        'aria-label': 'Send message',
+        onclick: function () {
+          if (!textarea.hasAttribute('readonly')) {
+            sendMessage(textarea.value);
+          }
+        },
+      },
+      ['Send'],
+    );
+
+    // ── Consent button ────────────────────────────────────────────────────────
+    // Disabled until the chatbot proposes a specific purchase (`proposedPurchase`
+    // in the /api/chat response). Per FR 14: no payment without an explicit click.
+    var consentBtnEl = h(
+      'button',
+      {
+        type: 'button',
+        disabled: !pendingProposedPurchase,
+        'aria-disabled': pendingProposedPurchase ? 'false' : 'true',
+        'data-consent-slot': 'confirm-and-pay',
+        style: pendingProposedPurchase ? consentBtnActiveStyle : consentBtnDisabledStyle,
+        text: pendingProposedPurchase
+          ? 'Confirm & pay: ' +
+            pendingProposedPurchase.productName +
+            ' — $' +
+            pendingProposedPurchase.unitPrice.toFixed(2)
+          : 'Confirm & pay',
+        onclick: confirmAndPay,
+      },
+      null,
+    );
+    activeConsentBtn = consentBtnEl;
+
+    // ── Composer ──────────────────────────────────────────────────────────────
+    var composerEl = h('div', { style: composerStyle }, [
+      h(
+        'div',
+        { style: { display: 'flex', gap: '8px', alignItems: 'flex-end' } },
+        [textarea, sendBtn],
+      ),
+      consentBtnEl,
+    ]);
+
+    // ── Full panel ────────────────────────────────────────────────────────────
     var panel = h(
       'section',
       { 'aria-label': 'Acme Assist chat panel', style: panelStyle },
@@ -261,45 +633,23 @@
             [h('span', { text: '×' })],
           ),
         ]),
-        h('ol', { style: listStyle }, [
-          bubble(
-            'assistant',
-            "Hi! I'm Acme Assist. I can help you find products, check your loyalty balance, and complete purchases with your saved cards.",
-          ),
-          bubble('user', 'Show me headphones under $200.'),
-          bubble(
-            'assistant',
-            "Great - here are a few options in your price range. When you're ready to check out, I'll need you to confirm the payment below.",
-          ),
-        ]),
-        h('div', { style: composerStyle }, [
-          h('textarea', {
-            rows: '2',
-            placeholder: 'Type a message...',
-            readonly: true,
-            'aria-label': 'Message Acme Assist',
-            style: inputStyle,
-          }),
-          h(
-            'button',
-            {
-              type: 'button',
-              disabled: true,
-              'aria-disabled': 'true',
-              'data-consent-slot': 'confirm-and-pay',
-              style: consentBtnStyle,
-              text: 'Confirm & pay',
-            },
-            null,
-          ),
-        ]),
+        listEl,
+        composerEl,
       ],
     );
 
     root.appendChild(panel);
+
+    // Fetch the access token when the panel opens (if not already available).
+    // A 401 response means the user is not signed in — textarea stays locked.
+    if (!accessToken) {
+      setTimeout(fetchAccessToken, 0);
+    }
+
     return root;
   }
 
+  // ── Mount ──────────────────────────────────────────────────────────────────
   function mount() {
     if (document.getElementById(MOUNT_ID)) return;
     document.body.appendChild(build(true));
