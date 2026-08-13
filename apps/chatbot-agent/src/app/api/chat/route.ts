@@ -31,6 +31,9 @@ import type {
   Cart,
 } from '@acme/shared';
 
+import { Client } from '@modelcontextprotocol/sdk/client';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp';
+
 import { dataFilePath } from '../../../lib/data-paths';
 import { exchangeToken } from '../../../lib/token-exchange';
 
@@ -105,7 +108,29 @@ async function exchangeForAgentToken(alphaToken: string): Promise<string> {
   return tokenResponse.access_token;
 }
 
-// ── Payment-api context fetch ────────────────────────────────────────────────
+// ── MCP tool-result helpers ───────────────────────────────────────────────────
+
+/**
+ * Return true when an MCP callTool result carries an error flag.
+ * The SDK return type is a complex union; we access it via a plain cast.
+ */
+function isToolError(result: unknown): boolean {
+  return !!(result as { isError?: boolean }).isError;
+}
+
+/**
+ * Extract the text of the first text-type content item from an MCP callTool result.
+ * Returns null if no text content is found.
+ */
+function firstTextContent(result: unknown): string | null {
+  const items = (result as { content?: Array<{ type?: unknown; text?: unknown }> }).content;
+  if (!Array.isArray(items)) return null;
+  const first = items[0];
+  if (!first || first.type !== 'text' || typeof first.text !== 'string') return null;
+  return first.text;
+}
+
+// ── Payment-api context fetch (via MCP) ──────────────────────────────────────
 
 interface UserContext {
   loyalty: LoyaltyBalance | null;
@@ -113,34 +138,57 @@ interface UserContext {
 }
 
 /**
- * Fetch the shopper's loyalty balance and saved wallet cards from the payment-api.
+ * Fetch the shopper's loyalty balance and saved wallet cards from the payment-api
+ * via MCP tool calls.
  *
- * Uses the chatbot-agent token (from Step 2) as the Bearer credential so that
- * the payment-api JWT middleware accepts the request.
+ * Creates a `StreamableHTTPClientTransport` with the chatbot-agent token (from
+ * Step 2) as the Bearer credential, then calls the `get_loyalty` and `get_wallet`
+ * MCP tools sequentially on a single client instance.
  */
-async function fetchUserContext(agentToken: string, userId: string): Promise<UserContext> {
-  const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(/\/$/, '');
-  const authHeaders = { Authorization: `Bearer ${agentToken}` };
+async function fetchUserContext(
+  agentToken: string,
+  userId: string,
+  merchantId: string,
+): Promise<UserContext> {
+  const mcpUrl = process.env['PAYMENT_API_MCP_URL'];
+  if (!mcpUrl) throw new Error('PAYMENT_API_MCP_URL is not set');
 
-  const [loyaltyRes, walletRes] = await Promise.all([
-    fetch(
-      `${baseUrl}/api/loyalty?userId=${encodeURIComponent(userId)}&merchantId=${NORTHWIND_MERCHANT_ID}`,
-      { headers: authHeaders },
-    ),
-    fetch(`${baseUrl}/api/wallet?userId=${encodeURIComponent(userId)}`, {
-      headers: authHeaders,
-    }),
-  ]);
+  const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
+    requestInit: { headers: { Authorization: `Bearer ${agentToken}` } },
+  });
+  const client = new Client({ name: 'chatbot-agent', version: '1.0.0' });
+  await client.connect(transport);
 
   let loyalty: LoyaltyBalance | null = null;
-  if (loyaltyRes.ok) {
-    const records = (await loyaltyRes.json()) as LoyaltyBalance[];
-    loyalty = records[0] ?? null;
-  }
-
   let walletCards: WalletCard[] = [];
-  if (walletRes.ok) {
-    walletCards = (await walletRes.json()) as WalletCard[];
+
+  try {
+    // Call get_loyalty
+    const loyaltyResult = await client.callTool({
+      name: 'get_loyalty',
+      arguments: { userId, merchantId },
+    });
+    if (!isToolError(loyaltyResult)) {
+      const text = firstTextContent(loyaltyResult);
+      if (text) {
+        const records = JSON.parse(text) as LoyaltyBalance[];
+        loyalty = records[0] ?? null;
+      }
+    }
+
+    // Call get_wallet
+    const walletResult = await client.callTool({
+      name: 'get_wallet',
+      arguments: { userId },
+    });
+    if (!isToolError(walletResult)) {
+      const text = firstTextContent(walletResult);
+      if (text) {
+        walletCards = JSON.parse(text) as WalletCard[];
+      }
+    }
+  } finally {
+    await client.close();
   }
 
   return { loyalty, walletCards };
@@ -368,7 +416,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Only proceed when agentToken is non-null (Step 2 succeeded).
     if (userId && agentToken) {
       try {
-        userCtx = await fetchUserContext(agentToken, userId);
+        userCtx = await fetchUserContext(agentToken, userId, NORTHWIND_MERCHANT_ID);
       } catch {
         // Non-fatal: proceed with no shopper context in the system prompt.
       }
@@ -420,17 +468,21 @@ export async function POST(request: Request): Promise<NextResponse> {
       ],
     };
 
-    const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(/\/$/, '');
+    const checkoutMcpUrl = process.env['PAYMENT_API_MCP_URL'];
     let checkoutResultContent: string;
 
     try {
-      const checkoutRes = await fetch(`${baseUrl}/api/checkout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${agentToken}`,
-        },
-        body: JSON.stringify({
+      if (!checkoutMcpUrl) throw new Error('PAYMENT_API_MCP_URL is not set');
+
+      const checkoutTransport = new StreamableHTTPClientTransport(new URL(checkoutMcpUrl), {
+        requestInit: { headers: { Authorization: `Bearer ${agentToken}` } },
+      });
+      const checkoutClient = new Client({ name: 'chatbot-agent', version: '1.0.0' });
+      await checkoutClient.connect(checkoutTransport);
+
+      const checkoutResult = await checkoutClient.callTool({
+        name: 'post_checkout',
+        arguments: {
           userId,
           selectedCardId: selectedCard.id,
           cart,
@@ -438,11 +490,13 @@ export async function POST(request: Request): Promise<NextResponse> {
             source: 'chatbot',
             confirmedAt,
           },
-        }),
+        },
       });
+      await checkoutClient.close();
 
-      if (checkoutRes.ok) {
-        const session = (await checkoutRes.json()) as {
+      const resultText = firstTextContent(checkoutResult);
+      if (!isToolError(checkoutResult) && resultText) {
+        const session = JSON.parse(resultText) as {
           status?: string;
           totalAmount?: number;
           currency?: string;
@@ -458,9 +512,9 @@ export async function POST(request: Request): Promise<NextResponse> {
             ? `${amount} ${currency} charged to your ${selectedCard.brand.toUpperCase()} card ending in ${last4}.`
             : `Your order for ${incomingProposedPurchase.productName} has been placed.`);
       } else {
-        let errMessage = checkoutRes.statusText;
+        let errMessage = resultText ?? 'Checkout call failed.';
         try {
-          const errBody = (await checkoutRes.json()) as { message?: string };
+          const errBody = JSON.parse(errMessage) as { message?: string };
           if (errBody.message) errMessage = errBody.message;
         } catch {
           // ignore parse failure
