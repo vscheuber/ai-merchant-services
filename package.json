@@ -5,7 +5,7 @@
   "description": "Agentic Commerce POC — Phase 1 scaffold: Acme Payments, Northwind Retail, Acme Assist.",
   "packageManager": "pnpm@9.15.4",
   "engines": {
-    "node": ">=20",
+    "node": ">=22",
     "pnpm": ">=9"
   },
   "scripts": {

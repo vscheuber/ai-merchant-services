@@ -23,6 +23,14 @@ import { dataFilePath } from '../../../lib/data-paths';
 const NORTHWIND_MERCHANT_ID = 'mrch_northwind';
 const DEFAULT_MODEL = 'gpt-4.1-mini';
 
+// Module-level singleton — created once when the env key is present, reused
+// across all requests rather than being re-allocated per request.
+// The POST handler's early guard ensures the client is only used when the key
+// is available; the null case is handled there with a clear HTTP 500.
+const openai: OpenAI | null = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
 /** Build the system prompt for Acme Assist using the Northwind product catalog. */
 function buildSystemPrompt(products: Product[]): string {
   const northwindProducts = products.filter((p) => p.merchantId === NORTHWIND_MERCHANT_ID);
@@ -49,7 +57,7 @@ function buildSystemPrompt(products: Product[]): string {
     '',
     '## Shopper Context',
     'No shopper session is active at this time. Loyalty status and saved payment cards will',
-    'appear here once the shopper is authenticated. (Token exchange wired in Task 10.)',
+    'appear here once the shopper is authenticated.',
     '',
     '## Instructions',
     '- Help shoppers discover and evaluate products from the Northwind catalog above.',
@@ -77,10 +85,18 @@ function toChatParam(m: ChatMessage): OpenAI.ChatCompletionMessageParam {
   }
 }
 
+/** CORS preflight handler — required so browser-originated POSTs from embed.js
+ *  (cross-origin, Content-Type: application/json) are not blocked. The actual
+ *  CORS response headers are set via `headers()` in next.config.mjs; this
+ *  handler ensures the preflight receives a 204 rather than a 405.
+ */
+export function OPTIONS(): NextResponse {
+  return new NextResponse(null, { status: 204 });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
-  // Guard: OPENAI_API_KEY must be set.
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  // Guard: OPENAI_API_KEY must be set (module-level singleton is null when absent).
+  if (!openai) {
     return NextResponse.json(
       {
         error: 'configuration_error',
@@ -125,7 +141,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   ];
 
   // Call the OpenAI chat completions API.
-  const openai = new OpenAI({ apiKey });
   let completion: OpenAI.ChatCompletion;
   try {
     completion = await openai.chat.completions.create({
