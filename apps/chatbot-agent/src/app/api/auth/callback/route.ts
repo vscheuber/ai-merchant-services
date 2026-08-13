@@ -31,7 +31,7 @@ function errorPage(errorValue: string, origin: string): string {
     window.parent.postMessage(msg, origin);
   }
 })();
-<\/script></body></html>`;
+</script></body></html>`;
 }
 
 function successPage(alphaToken: string, origin: string): string {
@@ -46,7 +46,7 @@ function successPage(alphaToken: string, origin: string): string {
     window.parent.postMessage(msg, origin);
   }
 })();
-<\/script></body></html>`;
+</script></body></html>`;
 }
 
 function badStatePage(): string {
@@ -60,7 +60,7 @@ function badStatePage(): string {
     window.parent.postMessage(msg, '*');
   }
 })();
-<\/script></body></html>`;
+</script></body></html>`;
 }
 
 const HTML_HEADERS = { 'Content-Type': 'text/html' };

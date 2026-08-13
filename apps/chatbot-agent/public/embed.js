@@ -765,11 +765,9 @@
       .then(function (res) {
         if (res.status === 401) {
           // Token expired between proposal and confirmation click.
-          // Clear the stale token and re-enable the confirm button so the
-          // user can sign in again and retry without losing the purchase.
+          // Restore the pending purchase so the button works again after re-auth.
           accessToken = null;
-          var confirmBtn = activeConsentBtn;
-          if (confirmBtn) confirmBtn.disabled = false;
+          setConsentButtonState(purchase);
           fetchAccessToken();
           return null;
         }
