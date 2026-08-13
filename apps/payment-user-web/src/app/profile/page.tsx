@@ -29,23 +29,25 @@ export default async function ProfilePage() {
   let walletCards: WalletCard[] = []
   let walletError: string | null = null
 
-  try {
-    const url = session.userId
-      ? `${baseUrl}/api/wallet?userId=${encodeURIComponent(session.userId)}`
-      : `${baseUrl}/api/wallet`
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${session.accessToken ?? ''}`,
-      },
-      cache: 'no-store',
-    })
-    if (res.ok) {
-      walletCards = (await res.json()) as WalletCard[]
-    } else {
-      walletError = `Unable to load wallet (HTTP ${res.status.toString()}).`
+  if (!session.userId) {
+    walletError = 'User identity unavailable.'
+  } else {
+    try {
+      const url = `${baseUrl}/api/wallet?userId=${encodeURIComponent(session.userId)}`
+      const res = await fetch(url, {
+        headers: {
+          ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+        },
+        cache: 'no-store',
+      })
+      if (res.ok) {
+        walletCards = (await res.json()) as WalletCard[]
+      } else {
+        walletError = `Unable to load wallet (HTTP ${res.status.toString()}).`
+      }
+    } catch {
+      walletError = 'Unable to connect to the payment API. Please try again later.'
     }
-  } catch {
-    walletError = 'Unable to connect to the payment API. Please try again later.'
   }
 
   return (

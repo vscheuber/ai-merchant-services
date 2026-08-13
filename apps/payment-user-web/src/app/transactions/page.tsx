@@ -51,23 +51,25 @@ export default async function TransactionsPage() {
   let transactions: Transaction[] = []
   let fetchError: string | null = null
 
-  try {
-    const url = session.userId
-      ? `${baseUrl}/api/transactions?userId=${encodeURIComponent(session.userId)}`
-      : `${baseUrl}/api/transactions`
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${session.accessToken ?? ''}`,
-      },
-      cache: 'no-store',
-    })
-    if (res.ok) {
-      transactions = (await res.json()) as Transaction[]
-    } else {
-      fetchError = `Unable to load transactions (HTTP ${res.status.toString()}).`
+  if (!session.userId) {
+    fetchError = 'User identity unavailable.'
+  } else {
+    try {
+      const url = `${baseUrl}/api/transactions?userId=${encodeURIComponent(session.userId)}`
+      const res = await fetch(url, {
+        headers: {
+          ...(session.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+        },
+        cache: 'no-store',
+      })
+      if (res.ok) {
+        transactions = (await res.json()) as Transaction[]
+      } else {
+        fetchError = `Unable to load transactions (HTTP ${res.status.toString()}).`
+      }
+    } catch {
+      fetchError = 'Unable to connect to the payment API. Please try again later.'
     }
-  } catch {
-    fetchError = 'Unable to connect to the payment API. Please try again later.'
   }
 
   return (
