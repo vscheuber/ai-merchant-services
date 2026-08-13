@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@acme/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "jose": "^5.9.6",
     "next": "^15.5.22",
     "react": "^19.0.0",
