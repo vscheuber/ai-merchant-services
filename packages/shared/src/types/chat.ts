@@ -41,12 +41,27 @@ export interface ProposedPurchase {
  *
  * `accessToken` carries the alpha realm user token (Step 1 result) so the
  * chatbot-agent server can perform Step 2 without a separate round-trip.
+ *
+ * When `confirmedAt` and `proposedPurchase` are both present, the chatbot-agent
+ * server interprets the request as a checkout confirmation event and calls
+ * `POST /api/checkout` on the payment-api instead of calling the LLM again.
  */
 export interface ChatRequest {
   /** Conversation history to send to the LLM. */
   messages: readonly ChatMessage[];
   /** Alpha realm access token for the authenticated shopper, if available. */
   accessToken?: string;
+  /**
+   * ISO-8601 timestamp of the shopper's "Confirm & pay" button click.
+   * When present together with `proposedPurchase`, triggers a checkout call
+   * rather than an LLM completion.
+   */
+  confirmedAt?: string;
+  /**
+   * The purchase the agent proposed in a prior turn.
+   * Required when `confirmedAt` is present.
+   */
+  proposedPurchase?: ProposedPurchase;
 }
 
 /**
