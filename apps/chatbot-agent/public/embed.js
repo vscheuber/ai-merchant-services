@@ -25,7 +25,6 @@
   'use strict';
 
   var MOUNT_ID = 'acme-assist-overlay-root';
-  var TOKEN_URL = 'http://localhost:3000/api/chatbot/token';
   var CHAT_URL = 'http://localhost:3004/api/chat';
 
   // ── Module-level state ─────────────────────────────────────────────────────
@@ -52,6 +51,15 @@
   // ── Guard ──────────────────────────────────────────────────────────────────
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   if (document.getElementById(MOUNT_ID)) return;
+
+  // ── Auth configuration ─────────────────────────────────────────────────────
+  var SCRIPT_ELEMENT = document.currentScript;
+  var AUTH_MODE = (SCRIPT_ELEMENT && SCRIPT_ELEMENT.getAttribute('data-auth-mode')) || 'pkce';
+  // Derive chatbot-agent origin from CHAT_URL via a DOM <a> element (ES5-compatible URL parsing)
+  var _a = document.createElement('a');
+  _a.href = CHAT_URL;
+  var CHATBOT_AGENT_ORIGIN = _a.protocol + '//' + _a.host;
+  var AUTH_START_URL = CHATBOT_AGENT_ORIGIN + '/api/auth/start';
 
   // ── DOM helper ─────────────────────────────────────────────────────────────
   function h(tag, attrs, children) {
@@ -331,53 +339,156 @@
   // ── Token fetch ────────────────────────────────────────────────────────────
 
   /**
-   * Fetch a short-lived alpha realm access token from the merchant-web token
-   * proxy (`GET /api/chatbot/token`).
+   * Obtain an access token using a standards-based OIDC PKCE or silent flow.
    *
-   * On HTTP 401: appends a "please sign in" assistant bubble; textarea stays
-   * read-only so the shopper cannot send messages.
-   * On success: stores the token in `accessToken` and removes the readonly guard
-   * from the textarea, enabling the shopper to start typing.
+   * PKCE mode (default / forcePkce === true):
+   *   1. Calls AUTH_START_URL → gets { authorizationUrl }.
+   *   2. Opens a popup window at that URL.
+   *   3. If popup is blocked: appends a sign-in bubble with a direct link.
+   *   4. Listens for a postMessage from CHATBOT_AGENT_ORIGIN:
+   *      - chatbot-token  → stores token, calls reenableInput().
+   *      - chatbot-error  → retries with a fresh PKCE popup.
+   *
+   * Silent mode (AUTH_MODE === 'silent'):
+   *   1. Calls AUTH_START_URL → gets { authorizationUrl }.
+   *   2. Injects a hidden iframe with prompt=none appended to the URL.
+   *   3. Listens for the same postMessage events.
+   *   4. On login_required / interaction_required: removes iframe and falls
+   *      back to PKCE popup.
+   *
+   * @param {boolean} [forcePkce] - Override AUTH_MODE and always use PKCE.
    */
-  function fetchAccessToken() {
+  function fetchAccessToken(forcePkce) {
     if (tokenFetching) return;
     tokenFetching = true;
 
-    fetch(TOKEN_URL)
-      .then(function (res) {
-        if (res.status === 401) {
-          appendBubble(
-            'assistant',
-            'Please sign in to use Acme Assist. Visit your account page to log in, then refresh this page.',
-          );
-          return null;
-        }
-        if (!res.ok) {
+    var effectiveMode = (forcePkce || AUTH_MODE !== 'silent') ? 'pkce' : 'silent';
+
+    fetch(AUTH_START_URL)
+      .then(function (authRes) {
+        return authRes.json();
+      })
+      .then(function (data) {
+        var authorizationUrl = data && data.authorizationUrl;
+        if (!authorizationUrl) {
+          tokenFetching = false;
           appendBubble(
             'assistant',
             'Unable to start a session. Please refresh the page and try again.',
           );
-          return null;
+          return;
         }
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data) return;
-        accessToken = data.accessToken;
-        if (activeTextarea) {
-          activeTextarea.removeAttribute('readonly');
-          activeTextarea.focus();
+
+        if (effectiveMode === 'silent') {
+          // ── Silent mode: inject hidden iframe with prompt=none ─────────────
+          var siFrame = document.createElement('iframe');
+          siFrame.setAttribute(
+            'style',
+            'display:none;position:absolute;width:0;height:0;border:0',
+          );
+          siFrame.src = authorizationUrl + '&prompt=none';
+
+          function silentHandler(event) {
+            if (event.origin !== CHATBOT_AGENT_ORIGIN) return;
+            var msg = event.data;
+            if (msg && msg.type === 'chatbot-token') {
+              window.removeEventListener('message', silentHandler);
+              if (siFrame.parentNode) siFrame.parentNode.removeChild(siFrame);
+              accessToken = msg.accessToken;
+              tokenFetching = false;
+              reenableInput();
+            } else if (
+              msg &&
+              msg.type === 'chatbot-error' &&
+              (msg.error === 'login_required' || msg.error === 'interaction_required')
+            ) {
+              window.removeEventListener('message', silentHandler);
+              if (siFrame.parentNode) siFrame.parentNode.removeChild(siFrame);
+              tokenFetching = false;
+              fetchAccessToken(true); // fall back to PKCE popup
+            }
+          }
+
+          window.addEventListener('message', silentHandler);
+          document.body.appendChild(siFrame);
+        } else {
+          // ── PKCE mode: open popup window ───────────────────────────────────
+          var popup = window.open(authorizationUrl, 'chatbot_auth', 'width=500,height=600');
+
+          if (!popup) {
+            // Popup was blocked — show a sign-in bubble with a direct link.
+            tokenFetching = false;
+            if (activeBubbleList) {
+              var pbLink = h(
+                'a',
+                { href: authorizationUrl, target: '_blank', text: 'click here to continue' },
+                null,
+              );
+              var pbDiv = h(
+                'div',
+                {
+                  style: {
+                    maxWidth: '85%',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    lineHeight: '1.35',
+                    background: '#f1f5f9',
+                    color: '#0f172a',
+                  },
+                },
+                ['Sign in to use Acme Assist — ', pbLink],
+              );
+              var pbLi = h(
+                'li',
+                { style: { display: 'flex', justifyContent: 'flex-start' } },
+                [pbDiv],
+              );
+              activeBubbleList.appendChild(pbLi);
+              activeBubbleList.scrollTop = activeBubbleList.scrollHeight;
+            }
+            return;
+          }
+
+          // Monitor popup: if it closes before sending a token, clear the
+          // tokenFetching flag so a subsequent open attempt is not blocked.
+          var popupCheckInterval = setInterval(function () {
+            if (popup.closed) {
+              clearInterval(popupCheckInterval);
+              tokenFetching = false;
+            }
+          }, 500);
+
+          function pkceHandler(event) {
+            if (event.origin !== CHATBOT_AGENT_ORIGIN) return;
+            var msg = event.data;
+            if (msg && msg.type === 'chatbot-token') {
+              window.removeEventListener('message', pkceHandler);
+              clearInterval(popupCheckInterval);
+              accessToken = msg.accessToken;
+              tokenFetching = false;
+              reenableInput();
+            } else if (
+              msg &&
+              msg.type === 'chatbot-error' &&
+              (msg.error === 'login_required' || msg.error === 'interaction_required')
+            ) {
+              window.removeEventListener('message', pkceHandler);
+              clearInterval(popupCheckInterval);
+              tokenFetching = false;
+              fetchAccessToken(); // retry with a fresh PKCE popup
+            }
+          }
+
+          window.addEventListener('message', pkceHandler);
         }
       })
       .catch(function () {
+        tokenFetching = false;
         appendBubble(
           'assistant',
           'Unable to connect to Acme Assist. Please refresh the page and try again.',
         );
-      })
-      .then(function () {
-        // Runs after both success and error branches — simulates Promise.finally.
-        tokenFetching = false;
       });
   }
 
@@ -387,13 +498,20 @@
    * Append a user bubble, POST the conversation to `/api/chat`, then render the
    * assistant response. Activates the consent button when `proposedPurchase` is
    * present in the response.
+   *
+   * 401 recovery: on a 401 from /api/chat the optimistic user bubble and
+   * messageHistory entry are rolled back, a silent re-auth iframe is injected,
+   * and the original message is retried once the new token arrives. If silent
+   * auth fails the flow falls back to a PKCE popup; if that is also blocked a
+   * sign-in bubble is shown.
    */
   function sendMessage(text) {
     text = String(text).trim();
     if (!text || !accessToken) return;
 
     // Optimistically render and record the user's message.
-    appendBubble('user', text);
+    // Capture the element so it can be removed if a 401 forces a re-auth rollback.
+    var userBubbleEl = appendBubble('user', text);
     messageHistory.push({ role: 'user', content: text });
 
     // Lock the textarea while waiting for the server response.
@@ -405,12 +523,183 @@
     // Temporary loading indicator — removed when the response arrives.
     var loadingEl = appendBubble('assistant', '…');
 
+    // Sentinel thrown on 401 to bypass the normal error handler in .catch().
+    var REAUTH_IN_PROGRESS = {};
+
     fetch(CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: messageHistory, accessToken: accessToken }),
     })
       .then(function (res) {
+        if (res.status === 401) {
+          accessToken = null;
+
+          // Roll back the optimistic render so sendMessage can replay it cleanly.
+          if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+          if (userBubbleEl && userBubbleEl.parentNode) userBubbleEl.parentNode.removeChild(userBubbleEl);
+          messageHistory.pop();
+
+          // ── Silent re-auth attempt ─────────────────────────────────────────
+          // Always try silent first, regardless of AUTH_MODE.
+          fetch(AUTH_START_URL)
+            .then(function (authRes) {
+              return authRes.json();
+            })
+            .then(function (authData) {
+              var authorizationUrl = authData && authData.authorizationUrl;
+              if (!authorizationUrl) {
+                appendBubble(
+                  'assistant',
+                  'Your session has expired. Please refresh the page to sign in again.',
+                );
+                reenableInput();
+                return;
+              }
+
+              var recoveryFrame = document.createElement('iframe');
+              recoveryFrame.setAttribute(
+                'style',
+                'display:none;position:absolute;width:0;height:0;border:0',
+              );
+              recoveryFrame.src = authorizationUrl + '&prompt=none';
+
+              function silentRecoveryHandler(event) {
+                if (event.origin !== CHATBOT_AGENT_ORIGIN) return;
+                var rmsg = event.data;
+                if (rmsg && rmsg.type === 'chatbot-token') {
+                  window.removeEventListener('message', silentRecoveryHandler);
+                  if (recoveryFrame.parentNode) recoveryFrame.parentNode.removeChild(recoveryFrame);
+                  accessToken = rmsg.accessToken;
+                  sendMessage(text); // retry the original message
+                } else if (
+                  rmsg &&
+                  rmsg.type === 'chatbot-error' &&
+                  (rmsg.error === 'login_required' || rmsg.error === 'interaction_required')
+                ) {
+                  window.removeEventListener('message', silentRecoveryHandler);
+                  if (recoveryFrame.parentNode) recoveryFrame.parentNode.removeChild(recoveryFrame);
+
+                  // ── PKCE popup fallback ────────────────────────────────────
+                  var pkcePopup = window.open(
+                    authorizationUrl,
+                    'chatbot_auth',
+                    'width=500,height=600',
+                  );
+
+                  if (!pkcePopup) {
+                    // Popup blocked — show an expired-session bubble with a link.
+                    if (activeBubbleList) {
+                      var expLink = h(
+                        'a',
+                        { href: authorizationUrl, target: '_blank', text: 'click here to sign in' },
+                        null,
+                      );
+                      var expDiv = h(
+                        'div',
+                        {
+                          style: {
+                            maxWidth: '85%',
+                            padding: '8px 12px',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            lineHeight: '1.35',
+                            background: '#f1f5f9',
+                            color: '#0f172a',
+                          },
+                        },
+                        ['Your session has expired — ', expLink],
+                      );
+                      var expLi = h(
+                        'li',
+                        { style: { display: 'flex', justifyContent: 'flex-start' } },
+                        [expDiv],
+                      );
+                      activeBubbleList.appendChild(expLi);
+                      activeBubbleList.scrollTop = activeBubbleList.scrollHeight;
+                    }
+                    reenableInput();
+                    return;
+                  }
+
+                  var pkcePopupCheck = setInterval(function () {
+                    if (pkcePopup.closed) {
+                      clearInterval(pkcePopupCheck);
+                    }
+                  }, 500);
+
+                  function pkceRecoveryHandler(event) {
+                    if (event.origin !== CHATBOT_AGENT_ORIGIN) return;
+                    var pmsg = event.data;
+                    if (pmsg && pmsg.type === 'chatbot-token') {
+                      window.removeEventListener('message', pkceRecoveryHandler);
+                      clearInterval(pkcePopupCheck);
+                      accessToken = pmsg.accessToken;
+                      sendMessage(text); // retry the original message
+                    } else if (
+                      pmsg &&
+                      pmsg.type === 'chatbot-error' &&
+                      (pmsg.error === 'login_required' || pmsg.error === 'interaction_required')
+                    ) {
+                      window.removeEventListener('message', pkceRecoveryHandler);
+                      clearInterval(pkcePopupCheck);
+                      // Show expired session bubble with link.
+                      if (activeBubbleList) {
+                        var expLink2 = h(
+                          'a',
+                          {
+                            href: authorizationUrl,
+                            target: '_blank',
+                            text: 'click here to sign in',
+                          },
+                          null,
+                        );
+                        var expDiv2 = h(
+                          'div',
+                          {
+                            style: {
+                              maxWidth: '85%',
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              fontSize: '14px',
+                              lineHeight: '1.35',
+                              background: '#f1f5f9',
+                              color: '#0f172a',
+                            },
+                          },
+                          ['Your session has expired — ', expLink2],
+                        );
+                        var expLi2 = h(
+                          'li',
+                          { style: { display: 'flex', justifyContent: 'flex-start' } },
+                          [expDiv2],
+                        );
+                        activeBubbleList.appendChild(expLi2);
+                        activeBubbleList.scrollTop = activeBubbleList.scrollHeight;
+                      }
+                      reenableInput();
+                    }
+                  }
+
+                  window.addEventListener('message', pkceRecoveryHandler);
+                }
+              }
+
+              window.addEventListener('message', silentRecoveryHandler);
+              document.body.appendChild(recoveryFrame);
+            })
+            .catch(function () {
+              appendBubble(
+                'assistant',
+                'Your session has expired. Please refresh the page to sign in again.',
+              );
+              reenableInput();
+            });
+
+          // Signal the outer promise chain to skip normal error handling.
+          throw REAUTH_IN_PROGRESS;
+        }
+
         if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
         return res.json();
       })
@@ -432,7 +721,9 @@
 
         reenableInput();
       })
-      .catch(function () {
+      .catch(function (err) {
+        // Silently discard the sentinel — re-auth recovery is already running.
+        if (err === REAUTH_IN_PROGRESS) return;
         if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
         appendBubble('assistant', 'Sorry, something went wrong. Please try again.');
         reenableInput();
