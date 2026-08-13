@@ -470,6 +470,7 @@
       }),
     })
       .then(function (res) {
+        if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
         return res.json();
       })
       .then(function (data) {
@@ -538,7 +539,12 @@
       listEl.appendChild(bubble(m.role, m.content));
     }
     // Scroll to the bottom after replaying history.
-    listEl.scrollTop = listEl.scrollHeight;
+    // Uses setTimeout to defer until after the root element is inserted into the
+    // document — detached elements have no computed layout, so scrollHeight is 0
+    // until the element is live in the DOM.
+    setTimeout(function () {
+      listEl.scrollTop = listEl.scrollHeight;
+    }, 0);
 
     // ── Textarea ──────────────────────────────────────────────────────────────
     // Starts read-only; the readonly guard is lifted after `fetchAccessToken`
