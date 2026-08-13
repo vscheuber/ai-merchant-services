@@ -42,7 +42,7 @@ function getBravoJwks(): ReturnType<typeof createRemoteJWKSet> {
   if (!bravoIssuer) {
     throw new Error('MERCHANT_OIDC_ISSUER environment variable is not set');
   }
-  bravoJwks = createRemoteJWKSet(new URL(`${bravoIssuer}/connect/jwk_uri`));
+  bravoJwks = createRemoteJWKSet(new URL(`${bravoIssuer.replace(/\/$/, '')}/connect/jwk_uri`));
   return bravoJwks;
 }
 
@@ -183,7 +183,9 @@ async function exchangeBravoForAlphaToken(bravoToken: string): Promise<string> {
   // Build the RFC 8693 token-exchange request.
   // The TokenExchangeRequest type from @acme/shared documents the field set;
   // URLSearchParams is used directly to avoid spreading optional fields.
-  const _exchangeReq: TokenExchangeRequest = {
+  // requested_token_type is appended conditionally so that an undefined value
+  // does not result in an empty-string key-value pair being sent to the server.
+  const exchangeReq: TokenExchangeRequest = {
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
     subject_token: bravoToken,
     subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
@@ -191,13 +193,15 @@ async function exchangeBravoForAlphaToken(bravoToken: string): Promise<string> {
   };
 
   const params = new URLSearchParams({
-    grant_type: _exchangeReq.grant_type,
-    subject_token: _exchangeReq.subject_token,
-    subject_token_type: _exchangeReq.subject_token_type,
-    requested_token_type: _exchangeReq.requested_token_type ?? '',
+    grant_type: exchangeReq.grant_type,
+    subject_token: exchangeReq.subject_token,
+    subject_token_type: exchangeReq.subject_token_type,
     client_id: clientId,
     client_secret: clientSecret,
   });
+  if (exchangeReq.requested_token_type) {
+    params.set('requested_token_type', exchangeReq.requested_token_type);
+  }
 
   const response = await fetch(tokenEndpoint, {
     method: 'POST',
@@ -229,10 +233,24 @@ export async function GET(): Promise<NextResponse> {
   const bravoToken = session.accessToken;
 
   // ── 2. Verify and decode the bravo JWT ────────────────────────────────────
+  // Validate the required env var before entering the JWT try/catch so that
+  // a missing configuration returns HTTP 500 (server error) rather than
+  // HTTP 401 (auth failure), which would mislead operators and monitors.
+  const bravoIssuer = process.env['MERCHANT_OIDC_ISSUER'];
+  if (!bravoIssuer) {
+    return NextResponse.json(
+      {
+        error: 'configuration_error',
+        message: 'MERCHANT_OIDC_ISSUER environment variable is not set',
+      },
+      { status: 500 },
+    );
+  }
+
   let payload: JWTPayload;
   try {
     const result = await jwtVerify(bravoToken, getBravoJwks(), {
-      issuer: process.env['MERCHANT_OIDC_ISSUER'],
+      issuer: bravoIssuer,
     });
     payload = result.payload;
   } catch (err) {
