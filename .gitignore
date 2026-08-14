@@ -43,3 +43,5 @@ Thumbs.db
 *.swo
 
 .playwright-mcp/
+.claude/
+.pnpm-store/
