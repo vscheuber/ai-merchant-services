@@ -1,0 +1,117 @@
+# Environment Variables
+
+Each app under `apps/` has a `.env.example` file listing the variables it reads at runtime. Copy each to `.env.local` and fill in real values before starting the relevant app.
+
+```bash
+cp apps/merchant-web/.env.example        apps/merchant-web/.env.local
+cp apps/payment-user-web/.env.example    apps/payment-user-web/.env.local
+cp apps/payment-admin-web/.env.example   apps/payment-admin-web/.env.local
+cp apps/payment-api/.env.example         apps/payment-api/.env.local
+cp apps/chatbot-agent/.env.example       apps/chatbot-agent/.env.local
+cp config/aic/.env.example               config/aic/.env
+```
+
+---
+
+## merchant-web
+
+| Variable | Description |
+| --- | --- |
+| `AUTH_SECRET` | Random secret used by Auth.js v5 to sign and encrypt session cookies. Generate with `openssl rand -base64 32`. |
+| `MERCHANT_OIDC_ISSUER` | Issuer URL for the merchant IDP (bravo realm). Auth.js uses this to auto-discover the OIDC metadata endpoint (`/.well-known/openid-configuration`). |
+| `MERCHANT_OIDC_CLIENT_ID` | OAuth2 client ID registered in the merchant IDP for `merchant-web`. |
+| `MERCHANT_OIDC_CLIENT_SECRET` | Client secret for the above. |
+| `PAYMENT_API_BASE_URL` | Base URL for `payment-api` (default: `http://localhost:3003`). Used by the checkout route. |
+| `PAYMENT_API_CLIENT_ID` | OAuth2 client ID for the `payment-api` client in the payment provider IDP (alpha realm). Used by the chatbot token proxy to obtain a service-account token for IDM operations and to perform the Step 1 bravo→alpha token exchange. |
+| `PAYMENT_API_CLIENT_SECRET` | Client secret for the above. |
+| `AIC_ALPHA_TOKEN_ENDPOINT` | Payment provider IDP (alpha realm) token endpoint. Used for both `client_credentials` (service-account token) and the RFC 8693 token-exchange grant (Step 1). |
+| `AIC_IDM_BASE_URL` | AIC IDM REST API base URL. Used to look up and JIT-provision `managed/alpha_user` records. |
+| `NEXT_PUBLIC_CHATBOT_EMBED_URL` | URL of the chatbot-agent overlay bundle. Exposed to the browser bundle. Defaults to `http://localhost:3004/embed.js` when not set. |
+
+---
+
+## payment-user-web
+
+| Variable | Description |
+| --- | --- |
+| `AUTH_SECRET` | Random secret for Auth.js v5 session cookie signing/encryption. |
+| `PAYMENT_OIDC_ISSUER` | Issuer URL for the payment provider IDP (alpha realm). |
+| `PAYMENT_OIDC_CLIENT_ID` | OAuth2 client ID registered in the payment provider IDP for `payment-user-web`. |
+| `PAYMENT_OIDC_CLIENT_SECRET` | Client secret for the above. |
+| `PAYMENT_API_BASE_URL` | Base URL for `payment-api` (default: `http://localhost:3003`). |
+
+---
+
+## payment-admin-web
+
+| Variable | Description |
+| --- | --- |
+| `AUTH_SECRET` | Random secret for Auth.js v5 session cookie signing/encryption. |
+| `PAYMENT_OIDC_ISSUER` | Issuer URL for the payment provider IDP (alpha realm). |
+| `PAYMENT_OIDC_CLIENT_ID` | OAuth2 client ID registered in the payment provider IDP for `payment-admin-web`. |
+| `PAYMENT_OIDC_CLIENT_SECRET` | Client secret for the above. |
+| `PAYMENT_API_BASE_URL` | Base URL for `payment-api` (default: `http://localhost:3003`). |
+
+---
+
+## payment-api
+
+| Variable | Description |
+| --- | --- |
+| `PAYMENT_OIDC_ISSUER` | Expected `iss` claim in incoming JWTs. Must match the payment provider IDP (alpha realm) issuer URL. |
+| `PAYMENT_OIDC_CLIENT_ID` | Client ID used for token introspection metadata (passed to `jwtVerify` for `audience` validation). |
+| `PAYMENT_OIDC_CLIENT_SECRET` | Client secret (currently unused at runtime but reserved for future token introspection). |
+| `PAYMENT_OIDC_JWKS_URI` | Payment provider IDP (alpha realm) JWKS endpoint. Used by the JWT middleware to validate incoming Bearer tokens. |
+| `AIC_TENANT_URL` | AIC tenant base URL. Reserved for future use — not currently read at runtime by `payment-api`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` instead. |
+| `AIC_ADMIN_SVC_ACCOUNT_ID` | AIC service-account UUID with admin rights. Used by the AIC provisioner. |
+| `AIC_ADMIN_SVC_ACCOUNT_KEY` | AIC service-account JWK (JSON string). Used by the AIC provisioner. |
+
+---
+
+## chatbot-agent
+
+| Variable | Description |
+| --- | --- |
+| `OPENAI_API_KEY` | OpenAI API key. Required — `POST /api/chat` returns HTTP 500 if absent. |
+| `OPENAI_MODEL` | OpenAI model ID (default: `gpt-4.1-mini`). |
+| `PAYMENT_API_BASE_URL` | Base URL for `payment-api` (default: `http://localhost:3003`). Used by `POST /api/chat` to call loyalty, wallet, and checkout endpoints. |
+| `CHATBOT_AGENT_CLIENT_ID` | OAuth2 client ID for the chatbot-agent in the payment provider IDP (alpha realm). Used for Step 2 token exchange. |
+| `CHATBOT_AGENT_CLIENT_SECRET` | Client secret for the above. |
+| `AIC_ALPHA_TOKEN_ENDPOINT` | Payment provider IDP (alpha realm) token endpoint. Used for the Step 2 RFC 8693 token-exchange grant. |
+| `AIC_TENANT_URL` | AIC tenant base URL. Reserved for future use — not currently read at runtime by `chatbot-agent`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` instead. |
+| `AIC_ADMIN_SVC_ACCOUNT_ID` | AIC service-account UUID. Used by the AIC provisioner. |
+| `AIC_ADMIN_SVC_ACCOUNT_KEY` | AIC service-account JWK (JSON string). Used by the AIC provisioner. |
+
+---
+
+## AIC provisioner (`config/aic`)
+
+| Variable | Description |
+| --- | --- |
+| `AIC_ADMIN_SVC_ACCOUNT_ID` | UUID of the AIC service account with admin rights on the tenant. |
+| `AIC_ADMIN_SVC_ACCOUNT_KEY` | JWK (JSON string) of the service account above. |
+| `BRAVO_USER_DEFAULT_PASSWORD` | Initial password assigned to all three demo merchant IDP users when created. If unset, a built-in fallback is used and a warning is printed. |
+
+---
+
+## URL patterns
+
+The AIC issuer URLs follow the pattern:
+
+```
+https://<tenant-url>/am/oauth2/realms/root/realms/<realm>
+```
+
+The JWKS URI pattern is:
+
+```
+https://<tenant-url>/am/oauth2/realms/root/realms/<realm>/connect/jwk_uri
+```
+
+The token endpoint pattern is:
+
+```
+https://<tenant-url>/am/oauth2/realms/root/realms/<realm>/access_token
+```
+
+Replace `<tenant-url>` with the value from `config/aic/inputs/tenant.json` and `<realm>` with `alpha` (payment provider IDP) or `bravo` (merchant IDP).
