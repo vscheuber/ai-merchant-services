@@ -6,7 +6,7 @@
       "status": "Active",
       "clientName": ["Acme Assist"],
       "scopes": ["openid", "profile", "email"],
-      "redirectionUris": ["http://localhost:3004/api/auth/callback/aic"],
+      "redirectionUris": ["https://payments.mytestrun.com/chatbot/api/auth/callback/aic"],
       "refreshTokenLifetime": 604800,
       "accessTokenLifetime": 3600,
       "authorizationCodeLifetime": 120

@@ -6,7 +6,7 @@
       "status": "Active",
       "clientName": ["Northwind Retail — Storefront"],
       "scopes": ["openid", "profile", "email"],
-      "redirectionUris": ["http://localhost:3000/api/auth/callback/aic"],
+      "redirectionUris": ["https://northwind.mytest.run/api/auth/callback/aic"],
       "refreshTokenLifetime": 604800,
       "accessTokenLifetime": 3600,
       "authorizationCodeLifetime": 120
