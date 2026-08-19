@@ -22,6 +22,7 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@acme/ui', '@acme/shared'],
+  basePath: '/chatbot',
   async headers() {
     return [
       {
