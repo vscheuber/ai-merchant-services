@@ -96,7 +96,7 @@ The table below maps env var groups to what they enable. See [environment.md](./
 | `CHATBOT_AGENT_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT` | `chatbot-agent` | Step 2 alpha user token→agent token exchange |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | `chatbot-agent` | Live LLM responses in `POST /api/chat` |
 | `NEXT_PUBLIC_CHATBOT_EMBED_URL` | `merchant-web` | Makes the overlay URL configurable (defaults to `http://localhost:3004/embed.js`) |
-| `AIC_TENANT_URL` / `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY` | `payment-api`, `chatbot-agent`, provisioner | AIC provisioner — creates/updates IDP resources |
+| `AIC_TENANT_URL` | `payment-api`, `chatbot-agent` | AIC tenant base URL (reserved for future runtime use) |
 | `BRAVO_USER_DEFAULT_PASSWORD` | provisioner only | Initial password for demo merchant IDP users |
 
 ---
@@ -106,11 +106,15 @@ The table below maps env var groups to what they enable. See [environment.md](./
 Before OIDC login and the chatbot token flow can work, the right resources must exist in each identity provider. Run the AIC provisioner to create them (see [scripts.md](./scripts.md)):
 
 ```bash
-export AIC_ADMIN_SVC_ACCOUNT_ID=<uuid>
-export AIC_ADMIN_SVC_ACCOUNT_KEY='<jwk-json>'
+# Ensure a frodo connection profile exists for the AIC tenant (run once):
+frodo conn save https://openam-volker-dev.forgeblocks.com/am
+
+# Set the bravo demo user password, then provision:
 export BRAVO_USER_DEFAULT_PASSWORD='<initial-password>'
 pnpm --filter @acme/aic-config provision
 ```
+
+The provisioner authenticates using the frodo connection profile stored in `~/.frodo/Connections.json` — no `AIC_ADMIN_SVC_ACCOUNT_ID` or `AIC_ADMIN_SVC_ACCOUNT_KEY` env vars are required.
 
 ### Merchant IDP (bravo realm)
 
@@ -200,7 +204,7 @@ Most startup errors are caused by missing workspace dependencies — re-run `pnp
 
 1. Confirm the relevant `.env.local` file exists and all `*_OIDC_*` vars are set.
 2. Confirm the OAuth2 client is registered in the IDP with the correct redirect URI.
-3. Run `pnpm --filter @acme/aic-config provision -- --dry-run` to check provisioner state (requires `AIC_ADMIN_SVC_ACCOUNT_ID` and `AIC_ADMIN_SVC_ACCOUNT_KEY`).
+3. Run `pnpm --filter @acme/aic-config provision -- --dry-run` to check provisioner state (requires a frodo connection profile for the AIC tenant in `~/.frodo/Connections.json`).
 
 **Chatbot returns "configuration error"**
 

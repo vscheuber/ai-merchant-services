@@ -62,15 +62,14 @@ Service status:
 
 Reads the desired-state configuration from `config/aic/inputs/` and idempotently creates or updates resources in a live Ping AIC tenant. Uses the `@rockcarver/frodo-lib` SDK.
 
-**Required env vars** (see [environment.md](./environment.md) for full descriptions):
+**Required configuration** (see [environment.md](./environment.md) for full descriptions):
 
-| Var | Purpose |
+| Source | Purpose |
 | --- | --- |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` | UUID of the AIC service account with admin rights |
-| `AIC_ADMIN_SVC_ACCOUNT_KEY` | JWK (JSON string) for the service account |
-| `BRAVO_USER_DEFAULT_PASSWORD` | Initial password assigned to demo merchant IDP users on creation |
+| frodo connection profile (`~/.frodo/Connections.json`) | AIC service account credentials — the provisioner calls `frodo.conn.getConnectionProfileByHost` to retrieve the service account ID and JWK; no env vars needed for authentication |
+| `BRAVO_USER_DEFAULT_PASSWORD` (env var) | Initial password assigned to demo merchant IDP users on creation |
 
-If `AIC_ADMIN_SVC_ACCOUNT_ID` or `AIC_ADMIN_SVC_ACCOUNT_KEY` is missing, the provisioner exits with an error listing the missing variables. `BRAVO_USER_DEFAULT_PASSWORD` is optional — if absent a built-in fallback is used and a warning is printed.
+If the frodo connection profile for the AIC tenant is missing or has no service account credentials, the provisioner exits with a descriptive error. Run `frodo conn save https://openam-volker-dev.forgeblocks.com/am` to create or refresh the profile. `BRAVO_USER_DEFAULT_PASSWORD` is optional — if absent a built-in fallback is used and a warning is printed.
 
 ### What the provisioner creates
 
@@ -117,7 +116,7 @@ Output:
 --- End dry-run plan ---
 ```
 
-`AIC_ADMIN_SVC_ACCOUNT_ID` and `AIC_ADMIN_SVC_ACCOUNT_KEY` are required even for `--dry-run` — the provisioner validates credentials before printing the plan. Only the actual AIC API calls are skipped.
+A frodo connection profile for the AIC tenant is required even for `--dry-run` — the provisioner resolves credentials from the profile before printing the plan. Only the actual AIC API calls are skipped during a dry run.
 
 ### Run output
 
@@ -125,13 +124,18 @@ When run live (without `--dry-run`), the provisioner writes a timestamped JSON s
 
 ### Running the provisioner
 
+Ensure a frodo connection profile exists for the AIC tenant (run once):
+
 ```bash
-# Set credentials
-export AIC_ADMIN_SVC_ACCOUNT_ID=<uuid>
-export AIC_ADMIN_SVC_ACCOUNT_KEY='<jwk-json>'
+frodo conn save https://openam-volker-dev.forgeblocks.com/am
+```
+
+Then set the bravo user password and run:
+
+```bash
 export BRAVO_USER_DEFAULT_PASSWORD='<initial-password>'
 
-# Preview plan (no AIC API calls, but credentials are still required)
+# Preview plan (frodo profile is read, but no AIC API calls are made)
 pnpm --filter @acme/aic-config provision -- --dry-run
 
 # Apply

@@ -305,20 +305,28 @@ export async function provision(
   config: TenantConfig,
   dryRun: boolean,
 ): Promise<RunSummary> {
-  const { tenantUrl, adminServiceAccountEnv, adminServiceAccountKeyEnv } = config;
+  const { tenantUrl } = config;
 
-  const svcAccountId = process.env[adminServiceAccountEnv];
-  const svcAccountJwk = process.env[adminServiceAccountKeyEnv];
+  const profile = await frodo.conn.getConnectionProfileByHost(tenantUrl);
 
-  if (!svcAccountId || !svcAccountJwk) {
-    const missing: string[] = [];
-    if (!svcAccountId) missing.push(adminServiceAccountEnv);
-    if (!svcAccountJwk) missing.push(adminServiceAccountKeyEnv);
+  const svcAccountId = profile.svcacctId;
+  if (!svcAccountId) {
     throw new Error(
-      `Missing required environment variable(s): ${missing.join(', ')}. ` +
-        `Set them before running this script.`,
+      `Frodo connection profile for '${tenantUrl}' is missing svcacctId. ` +
+        `Run 'frodo conn save ${tenantUrl}' to populate the connection profile.`,
     );
   }
+
+  const rawJwk: unknown = profile.svcacctJwk;
+  if (!rawJwk) {
+    throw new Error(
+      `Frodo connection profile for '${tenantUrl}' is missing svcacctJwk. ` +
+        `Run 'frodo conn save ${tenantUrl}' to populate the connection profile.`,
+    );
+  }
+  // Normalise: frodo-lib decryption may return a JSON string or a parsed object.
+  const svcAccountJwk: string =
+    typeof rawJwk === 'string' ? rawJwk : JSON.stringify(rawJwk);
 
   // Load inputs
   const alphaClients = loadAlphaOAuth2Clients();

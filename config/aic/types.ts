@@ -1,7 +1,5 @@
 export interface TenantConfig {
   tenantUrl: string;
-  adminServiceAccountEnv: string;
-  adminServiceAccountKeyEnv: string;
 }
 
 // frodo_read returns {inherited, value} wrappers — handle in flattenWrapped

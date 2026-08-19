@@ -1,5 +1,3 @@
 {
-  "tenantUrl": "https://idc.scheuber.io",
-  "adminServiceAccountEnv": "AIC_ADMIN_SVC_ACCOUNT_ID",
-  "adminServiceAccountKeyEnv": "AIC_ADMIN_SVC_ACCOUNT_KEY"
+  "tenantUrl": "https://openam-volker-dev.forgeblocks.com/am"
 }
