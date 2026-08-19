@@ -2,12 +2,9 @@
   {
     "_id": "bravo-realm",
     "issuer": "https://idc.mytest.run/am/oauth2",
-    "jwkSet": null,
     "jwksCacheTimeout": 3600000,
     "jwkStoreCacheMissCacheTime": 60000,
     "jwksUri": "https://idc.mytest.run/am/oauth2/connect/jwk_uri",
-    "resourceOwnerIdentity": "sub",
-    "trustedIssuerClaims": ["sub"],
-    "claimsToUserMapping": {}
+    "resourceOwnerIdentityClaim": "sub"
   }
 ]

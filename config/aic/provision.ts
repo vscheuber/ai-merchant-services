@@ -200,6 +200,7 @@ function stripAgentIdentityFields(obj: Record<string, unknown>): Record<string, 
   const result = { ...obj };
   delete result['aiAgentIdentityUid'];
   delete result['_aiAgentIdentity'];
+  delete result['aiAgentIdentityAttributes'];
   return result;
 }
 
@@ -222,9 +223,13 @@ async function upsertAIAgent(
         agentId,
       )) as unknown as Record<string, unknown>;
     } catch {
+      // Pass false for includeAgentIdentity to skip IDM managed-object handling
+      // (the frodo-lib identity sync corrupts array fields on invalid-attribute errors).
+      // The OAuth2 client + AM agent are sufficient for the chatbot auth flow.
       await instance.agent.createAIAgent(
         agentId,
         safeDesired as Parameters<typeof instance.agent.createAIAgent>[1],
+        false,
       );
       console.log(`[${realm}] AIAgent created: ${agentId}`);
       return { action: 'created', resourceType, realm, id: agentId };
@@ -259,33 +264,36 @@ async function upsertBravoUser(
     return { action: 'dry-run', resourceType, realm, id: userId };
   }
   // Base profile fields shared by create and update.
+  // merchantId is not a bravo_user schema field; apps source it from their own config.
   const moBase = {
     userName: user.userName,
     mail: user.email,
     givenName: user.givenName,
     sn: user.sn,
-    merchantId: user.merchantId,
   };
   try {
-    // Try to read the existing managed object by _id
-    try {
-      await instance.idm.managed.readManagedObject('bravo_user', userId);
-    } catch {
-      // Does not exist — create it (include password only on initial creation).
-      const moCreate = { ...moBase, userPassword };
+    // IDM requires _id to be a UUID; look up by userName instead of user.id.
+    const existing = await instance.idm.managed.queryManagedObjects(
+      'bravo_user',
+      `userName eq "${user.userName}"`,
+      ['_id', 'userName'],
+    );
+    if (existing.length === 0) {
+      // Does not exist — create without custom _id so IDM auto-generates a UUID.
+      const moCreate = { ...moBase, password: userPassword };
       await instance.idm.managed.createManagedObject(
         'bravo_user',
         moCreate as Parameters<typeof instance.idm.managed.createManagedObject>[1],
-        userId,
       );
       console.log(`[${realm}] BravoUser created: ${userId} (${user.userName})`);
       return { action: 'created', resourceType, realm, id: userId };
     }
     // Exists — update profile fields only; skip password to prevent accidental
     // credential resets after initial provisioning.
+    const existingUuid = existing[0]._id as string;
     await instance.idm.managed.updateManagedObject(
       'bravo_user',
-      userId,
+      existingUuid,
       moBase as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
     );
     console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
