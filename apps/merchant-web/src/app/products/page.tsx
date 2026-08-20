@@ -12,7 +12,6 @@
 //
 // Next.js App Router requires a default export.
 
-import { redirect } from 'next/navigation'
 import type { Product } from '@acme/shared'
 import { AppShell } from '@acme/ui'
 import { auth } from '../../auth'
@@ -29,32 +28,28 @@ const nav = [
 export default async function ProductsPage() {
   const session = await auth()
 
-  // Redirect to the AIC bravo realm login if there is no active session.
-  if (!session) {
-    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/products'))
-  }
-
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
   let products: Product[] = []
   let fetchError: string | null = null
 
-  // Exchange the bravo access_token for an alpha token required by payment-api.
-  // If the exchange fails (e.g. AIC not configured) we fall through with an
-  // empty token — the products fetch will return a 401 and show an error.
-  let alphaToken = ''
-  try {
-    alphaToken = await getAlphaToken(session.accessToken ?? '', session.user)
-  } catch {
-    // Non-blocking — fetch below handles non-OK responses gracefully.
+  // Only attempt the bravo→alpha token exchange for authenticated users.
+  // Anonymous visitors fetch products without a Bearer token; the payment-api
+  // /api/products endpoint is configured to allow unauthenticated reads.
+  const headers: Record<string, string> = {}
+  if (session?.accessToken) {
+    try {
+      const alphaToken = await getAlphaToken(session.accessToken, session.user)
+      if (alphaToken) headers['Authorization'] = `Bearer ${alphaToken}`
+    } catch {
+      // Non-blocking — anonymous product fetch is the fallback.
+    }
   }
 
   try {
     const res = await fetch(
       `${baseUrl}/api/products?merchantId=mrch_northwind`,
       {
-        headers: {
-          Authorization: `Bearer ${alphaToken}`,
-        },
+        headers,
         // Never cache — product stock can change between requests.
         cache: 'no-store',
       },

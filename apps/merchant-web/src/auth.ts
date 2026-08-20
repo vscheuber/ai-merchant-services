@@ -42,7 +42,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     {
       id: "aic",
-      name: "AIC Bravo",
+      name: "Northwind Account",
       type: "oidc",
       // Issuer URL for the AIC bravo realm — used to discover the OIDC metadata
       // endpoint (/.well-known/openid-configuration), authorization endpoint,

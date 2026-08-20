@@ -1,7 +1,7 @@
 [
   {
     "_id": "bravo-realm",
-    "issuer": "https://idc.mytest.run/am/oauth2",
+    "issuer": "https://idc.mytest.run:443/am/oauth2",
     "jwksCacheTimeout": 3600000,
     "jwkStoreCacheMissCacheTime": 60000,
     "jwksUri": "https://idc.mytest.run/am/oauth2/connect/jwk_uri",

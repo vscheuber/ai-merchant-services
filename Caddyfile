@@ -15,8 +15,8 @@ payments.mytestrun.com {
 		reverse_proxy localhost:3001
 	}
 
-	# payment-admin-web (basePath: /admin)
-	handle /admin/* {
+	# payment-admin-web (basePath: /admin) — match bare /admin and /admin/*
+	handle /admin* {
 		reverse_proxy localhost:3002
 	}
 
@@ -25,8 +25,8 @@ payments.mytestrun.com {
 		reverse_proxy localhost:3003
 	}
 
-	# chatbot-agent (basePath: /chatbot — no prefix strip)
-	handle /chatbot/* {
+	# chatbot-agent (basePath: /chatbot — no prefix strip) — match bare /chatbot and /chatbot/*
+	handle /chatbot* {
 		reverse_proxy localhost:3004
 	}
 

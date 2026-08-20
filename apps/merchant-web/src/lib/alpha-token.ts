@@ -17,6 +17,22 @@
 
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { JWTPayload } from 'jose';
+
+/**
+ * AIC OIDC discovery returns issuers with an explicit :443 port even though
+ * it's the HTTPS default (e.g. "https://idc.mytest.run:443/am/oauth2").
+ * jose's jwtVerify does an exact-string issuer comparison, so we normalise
+ * our configured issuer URLs to include :443 before passing them to jwtVerify.
+ */
+function normalizeIssuer(issuer: string): string {
+  // Already has a port — leave it unchanged.
+  if (/^https?:\/\/[^/]+:\d+/.test(issuer)) return issuer;
+  // Insert :443 after the hostname for HTTPS issuers.
+  if (issuer.startsWith('https://')) {
+    return issuer.replace(/^(https:\/\/[^/]+)/, '$1:443');
+  }
+  return issuer;
+}
 import type { TokenExchangeRequest, TokenExchangeResponse } from '@acme/shared';
 
 // ─── Bravo JWKS (lazily initialised, reused across requests) ────────────────
@@ -234,7 +250,7 @@ export async function getAlphaToken(
 
   let payload: JWTPayload;
   try {
-    const result = await jwtVerify(bravoToken, getBravoJwks(), { issuer: bravoIssuer });
+    const result = await jwtVerify(bravoToken, getBravoJwks(), { issuer: normalizeIssuer(bravoIssuer) });
     payload = result.payload;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Bravo JWT verification failed.';

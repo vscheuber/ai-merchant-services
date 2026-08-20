@@ -13,7 +13,7 @@
     },
     "advancedOAuth2ClientConfig": {
       "grantTypes": ["authorization_code", "refresh_token"],
-      "isConsentImplied": false,
+      "isConsentImplied": true,
       "responseTypes": ["code"],
       "tokenEndpointAuthMethod": "client_secret_post"
     }
