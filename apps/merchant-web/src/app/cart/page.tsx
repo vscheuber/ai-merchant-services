@@ -14,6 +14,7 @@
 import Link from 'next/link'
 import { AppShell, Button, Card, CardContent, CardHeader, CardTitle, buttonVariants } from '@acme/ui'
 import { useCart } from '../../components/cart-provider'
+import { ClientHeaderActions } from '../../components/client-header-actions'
 
 const nav = [
   { label: 'Products', href: '/products' },
@@ -37,7 +38,7 @@ export default function CartPage() {
   // ── Empty state ────────────────────────────────────────────────────────────
   if (items.length === 0) {
     return (
-      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<ClientHeaderActions />}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Cart</p>
           <h1 className="text-3xl font-semibold tracking-tight">Your cart is empty</h1>
@@ -50,8 +51,7 @@ export default function CartPage() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground">
               <p>
-                Browse the catalog or ask the Acme Assist chat overlay in the corner for a
-                recommendation.
+                Browse the catalog or use the shopping assistant for a recommendation.
               </p>
               <Link href="/products" className={buttonVariants()}>
                 Shop products

@@ -30,7 +30,7 @@ export default async function UsersPage() {
 
   // Redirect to the AIC alpha realm login if there is no active session.
   if (!session) {
-    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/users'))
+    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/admin/users'))
   }
 
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'

@@ -27,6 +27,7 @@ export type {
   TokenExchangeRequest,
   TokenExchangeResponse,
 } from './types/token-exchange';
+export type { TokenTrace, TokenTraceStage } from './types/token-trace';
 
 export { DATA_DIR, dataPath } from './data/paths';
 export type { DataFileName } from './data/paths';

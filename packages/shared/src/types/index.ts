@@ -19,3 +19,4 @@ export type {
   TokenExchangeRequest,
   TokenExchangeResponse,
 } from './token-exchange';
+export type { TokenTrace, TokenTraceStage } from './token-trace';

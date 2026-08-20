@@ -1,23 +1,23 @@
 // Products page — requires an authenticated Auth.js session.
 //
-// Fetches the Northwind product catalog from payment-api. The bravo
-// access_token from the Auth.js session is first exchanged for an alpha
-// realm token (via getAlphaToken) because payment-api only accepts alpha
+// Fetches the Northwind product catalog from payment-provider-api. The merchant
+// access_token from the Auth.js session is first exchanged for an payment-provider
+// realm token (via getPaymentToken) because payment-provider-api only accepts payment-provider
 // realm Bearer tokens. The product array is passed to the client-side
 // ProductGrid component so "Add to cart" buttons can interact with the
 // CartProvider context from the root layout.
 //
-// If the payment-api is unreachable, an error message is rendered rather than
+// If the payment-provider-api is unreachable, an error message is rendered rather than
 // crashing — the session guard still fires so the user stays authenticated.
 //
 // Next.js App Router requires a default export.
 
-import { redirect } from 'next/navigation'
 import type { Product } from '@acme/shared'
 import { AppShell } from '@acme/ui'
 import { auth } from '../../auth'
-import { getAlphaToken } from '../../lib/alpha-token'
+import { getPaymentToken } from '../../lib/alpha-token'
 import { ProductGrid } from '../../components/product-grid'
+import { MerchantHeaderActions } from '../../components/merchant-header-actions'
 
 const nav = [
   { label: 'Products', href: '/products' },
@@ -28,33 +28,30 @@ const nav = [
 
 export default async function ProductsPage() {
   const session = await auth()
-
-  // Redirect to the AIC bravo realm login if there is no active session.
-  if (!session) {
-    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/products'))
-  }
+  const isMember = Boolean(session?.accessToken)
 
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
   let products: Product[] = []
   let fetchError: string | null = null
 
-  // Exchange the bravo access_token for an alpha token required by payment-api.
-  // If the exchange fails (e.g. AIC not configured) we fall through with an
-  // empty token — the products fetch will return a 401 and show an error.
-  let alphaToken = ''
-  try {
-    alphaToken = await getAlphaToken(session.accessToken ?? '', session.user)
-  } catch {
-    // Non-blocking — fetch below handles non-OK responses gracefully.
+  // Only attempt the merchant→payment-provider token exchange for authenticated users.
+  // Anonymous visitors fetch products without a Bearer token; the payment-provider-api
+  // /api/products endpoint is configured to allow unauthenticated reads.
+  const headers: Record<string, string> = {}
+  if (session?.accessToken) {
+    try {
+      const downstreamToken = await getPaymentToken(session.accessToken, session.user)
+      if (downstreamToken) headers['Authorization'] = `Bearer ${downstreamToken}`
+    } catch {
+      // Non-blocking — anonymous product fetch is the fallback.
+    }
   }
 
   try {
     const res = await fetch(
       `${baseUrl}/api/products?merchantId=mrch_northwind`,
       {
-        headers: {
-          Authorization: `Bearer ${alphaToken}`,
-        },
+        headers,
         // Never cache — product stock can change between requests.
         cache: 'no-store',
       },
@@ -69,7 +66,7 @@ export default async function ProductsPage() {
   }
 
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<MerchantHeaderActions />}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Products</p>
         <h1 className="text-3xl font-semibold tracking-tight">Northwind catalog</h1>
@@ -82,7 +79,7 @@ export default async function ProductsPage() {
         {fetchError != null ? (
           <p className="text-sm text-destructive">{fetchError}</p>
         ) : (
-          <ProductGrid products={products} />
+          <ProductGrid products={products} isMember={isMember} />
         )}
       </section>
     </AppShell>

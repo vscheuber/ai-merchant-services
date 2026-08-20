@@ -62,9 +62,7 @@ cp config/aic/.env.example               config/aic/.env
 | `PAYMENT_OIDC_CLIENT_ID` | Client ID used for token introspection metadata (passed to `jwtVerify` for `audience` validation). |
 | `PAYMENT_OIDC_CLIENT_SECRET` | Client secret (currently unused at runtime but reserved for future token introspection). |
 | `PAYMENT_OIDC_JWKS_URI` | Payment provider IDP (alpha realm) JWKS endpoint. Used by the JWT middleware to validate incoming Bearer tokens. |
-| `AIC_TENANT_URL` | AIC tenant base URL. Reserved for future use — not currently read at runtime by `payment-api`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` instead. |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` | AIC service-account UUID with admin rights. Used by the AIC provisioner. |
-| `AIC_ADMIN_SVC_ACCOUNT_KEY` | AIC service-account JWK (JSON string). Used by the AIC provisioner. |
+| `AIC_TENANT_URL` | AIC tenant base URL. Reserved for future use — not currently read at runtime by `payment-api`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` and authenticates via frodo connection profile. |
 
 ---
 
@@ -78,9 +76,7 @@ cp config/aic/.env.example               config/aic/.env
 | `CHATBOT_AGENT_CLIENT_ID` | OAuth2 client ID for the chatbot-agent in the payment provider IDP (alpha realm). Used for Step 2 token exchange. |
 | `CHATBOT_AGENT_CLIENT_SECRET` | Client secret for the above. |
 | `AIC_ALPHA_TOKEN_ENDPOINT` | Payment provider IDP (alpha realm) token endpoint. Used for the Step 2 RFC 8693 token-exchange grant. |
-| `AIC_TENANT_URL` | AIC tenant base URL. Reserved for future use — not currently read at runtime by `chatbot-agent`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` instead. |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` | AIC service-account UUID. Used by the AIC provisioner. |
-| `AIC_ADMIN_SVC_ACCOUNT_KEY` | AIC service-account JWK (JSON string). Used by the AIC provisioner. |
+| `AIC_TENANT_URL` | AIC tenant base URL. Reserved for future use — not currently read at runtime by `chatbot-agent`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` and authenticates via frodo connection profile. |
 
 ---
 
@@ -88,30 +84,19 @@ cp config/aic/.env.example               config/aic/.env
 
 | Variable | Description |
 | --- | --- |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` | UUID of the AIC service account with admin rights on the tenant. |
-| `AIC_ADMIN_SVC_ACCOUNT_KEY` | JWK (JSON string) of the service account above. |
 | `BRAVO_USER_DEFAULT_PASSWORD` | Initial password assigned to all three demo merchant IDP users when created. If unset, a built-in fallback is used and a warning is printed. |
+
+The provisioner authenticates using the frodo connection profile stored at `~/.frodo/Connections.json`. Run `frodo conn save https://openam-volker-dev.forgeblocks.com/am` once to create or refresh the profile. No `AIC_ADMIN_SVC_ACCOUNT_ID` or `AIC_ADMIN_SVC_ACCOUNT_KEY` env vars are required.
 
 ---
 
 ## URL patterns
 
-The AIC issuer URLs follow the pattern:
+When AIC is accessed through a custom domain alias, it drops the explicit realm path from issuer and endpoint URLs. The two custom domains used in this project are:
 
-```
-https://<tenant-url>/am/oauth2/realms/root/realms/<realm>
-```
+| Domain | Realm | Issuer | Token endpoint | JWKS URI |
+| --- | --- | --- | --- | --- |
+| `idc.mytestrun.com` | Payment provider IDP (alpha) | `https://idc.mytestrun.com/am/oauth2` | `https://idc.mytestrun.com/am/oauth2/access_token` | `https://idc.mytestrun.com/am/oauth2/connect/jwk_uri` |
+| `idc.mytest.run` | Merchant IDP (bravo) | `https://idc.mytest.run/am/oauth2` | `https://idc.mytest.run/am/oauth2/access_token` | `https://idc.mytest.run/am/oauth2/connect/jwk_uri` |
 
-The JWKS URI pattern is:
-
-```
-https://<tenant-url>/am/oauth2/realms/root/realms/<realm>/connect/jwk_uri
-```
-
-The token endpoint pattern is:
-
-```
-https://<tenant-url>/am/oauth2/realms/root/realms/<realm>/access_token
-```
-
-Replace `<tenant-url>` with the value from `config/aic/inputs/tenant.json` and `<realm>` with `alpha` (payment provider IDP) or `bravo` (merchant IDP).
+Note: AIC discovery documents include `:443` in the issuer (`https://idc.mytestrun.com:443/am/oauth2`). Auth.js / `openid-client` normalizes standard ports, so omitting `:443` in env vars is safe.

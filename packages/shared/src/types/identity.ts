@@ -1,17 +1,17 @@
 /**
  * Identity records mirrored from the two IDP realms on the AIC tenant.
  *
- * `MerchantIdentity` mirrors the shape of a `managed/bravo_user` — the
+ * `MerchantIdentity` mirrors the shape of a `merchant-provider managed user` — the
  * merchant-side realm holds the shopper's authoritative account. Seed data
  * in `data/users.json` populates this shape.
  *
- * `PaymentIdentity` mirrors the shape of a `managed/alpha_user` — the
+ * `PaymentIdentity` mirrors the shape of a `payment-provider managed user` — the
  * payment-side realm. The scaffold does not seed payment identities; the
  * follow-on JIT-provisioning task will create them on first token exchange,
  * so the type exists here to lock in the shape for downstream tasks.
  */
 export interface MerchantIdentity {
-  /** Stable synthetic id, e.g. `user_ada`. Corresponds to `managed/bravo_user._id`. */
+  /** Stable synthetic id, e.g. `user_ada`. Corresponds to `merchant-provider managed user._id`. */
   id: string;
   /** Login/user name. */
   userName: string;
@@ -26,7 +26,7 @@ export interface MerchantIdentity {
 }
 
 export interface PaymentIdentity {
-  /** Stable id — matches `managed/alpha_user._id`. */
+  /** Stable id — matches `payment-provider managed user._id`. */
   id: string;
   /** Login/user name on the payment realm. */
   userName: string;
@@ -40,5 +40,5 @@ export interface PaymentIdentity {
    * Marker for observability: which realm's JIT flow provisioned this
    * payment identity. Left optional so hand-created records stay clean.
    */
-  provisioningSource?: 'bravo-jit';
+  provisioningSource?: 'merchant-jit';
 }

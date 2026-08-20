@@ -1,13 +1,10 @@
 [
   {
     "_id": "bravo-realm",
-    "issuer": "https://idc.scheuber.io/am/oauth2/realms/root/realms/bravo",
-    "jwkSet": null,
+    "issuer": "https://idc.mytest.run:443/am/oauth2",
     "jwksCacheTimeout": 3600000,
     "jwkStoreCacheMissCacheTime": 60000,
-    "jwksUri": "https://idc.scheuber.io/am/oauth2/realms/root/realms/bravo/connect/jwk_uri",
-    "resourceOwnerIdentity": "sub",
-    "trustedIssuerClaims": ["sub"],
-    "claimsToUserMapping": {}
+    "jwksUri": "https://idc.mytest.run/am/oauth2/connect/jwk_uri",
+    "resourceOwnerIdentityClaim": "sub"
   }
 ]

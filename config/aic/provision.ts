@@ -116,6 +116,24 @@ type FrodoInstance = ReturnType<typeof frodo.createInstanceWithServiceAccount>;
 // Upsert helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * If OAUTH2_SECRET_<CLIENT_ID_UPPERCASED> is set, inject it as the client
+ * secret (coreOAuth2ClientConfig.userpassword). This lets operators set known
+ * secrets via config/aic/.env without committing credentials in JSON files.
+ */
+function injectClientSecret(clientId: string, payload: OAuth2ClientPayload): OAuth2ClientPayload {
+  const envKey = `OAUTH2_SECRET_${clientId.toUpperCase().replace(/-/g, '_')}`;
+  const secret = process.env[envKey];
+  if (!secret) return payload;
+  return {
+    ...payload,
+    coreOAuth2ClientConfig: {
+      ...(payload.coreOAuth2ClientConfig ?? {}),
+      userpassword: secret,
+    },
+  };
+}
+
 async function upsertOAuth2Client(
   clientId: string,
   desired: OAuth2ClientPayload,
@@ -127,6 +145,7 @@ async function upsertOAuth2Client(
   if (dryRun) {
     return { action: 'dry-run', resourceType, realm, id: clientId };
   }
+  const desiredWithSecret = injectClientSecret(clientId, desired);
   try {
     let live: Record<string, unknown>;
     try {
@@ -136,13 +155,13 @@ async function upsertOAuth2Client(
     } catch {
       await instance.oauth2oidc.client.createOAuth2Client(
         clientId,
-        desired as Parameters<typeof instance.oauth2oidc.client.createOAuth2Client>[1],
+        desiredWithSecret as Parameters<typeof instance.oauth2oidc.client.createOAuth2Client>[1],
       );
       console.log(`[${realm}] OAuth2Client created: ${clientId}`);
       return { action: 'created', resourceType, realm, id: clientId };
     }
     const flat = flattenWrapped(live) as Record<string, unknown>;
-    const merged = deepMerge(flat, desired as Record<string, unknown>);
+    const merged = deepMerge(flat, desiredWithSecret as Record<string, unknown>);
     await instance.oauth2oidc.client.updateOAuth2Client(
       clientId,
       merged as Parameters<typeof instance.oauth2oidc.client.updateOAuth2Client>[1],
@@ -200,6 +219,7 @@ function stripAgentIdentityFields(obj: Record<string, unknown>): Record<string, 
   const result = { ...obj };
   delete result['aiAgentIdentityUid'];
   delete result['_aiAgentIdentity'];
+  delete result['aiAgentIdentityAttributes'];
   return result;
 }
 
@@ -222,9 +242,13 @@ async function upsertAIAgent(
         agentId,
       )) as unknown as Record<string, unknown>;
     } catch {
+      // Pass false for includeAgentIdentity to skip IDM managed-object handling
+      // (the frodo-lib identity sync corrupts array fields on invalid-attribute errors).
+      // The OAuth2 client + AM agent are sufficient for the chatbot auth flow.
       await instance.agent.createAIAgent(
         agentId,
         safeDesired as Parameters<typeof instance.agent.createAIAgent>[1],
+        false,
       );
       console.log(`[${realm}] AIAgent created: ${agentId}`);
       return { action: 'created', resourceType, realm, id: agentId };
@@ -259,34 +283,37 @@ async function upsertBravoUser(
     return { action: 'dry-run', resourceType, realm, id: userId };
   }
   // Base profile fields shared by create and update.
+  // merchantId is not a bravo_user schema field; apps source it from their own config.
   const moBase = {
     userName: user.userName,
     mail: user.email,
     givenName: user.givenName,
     sn: user.sn,
-    merchantId: user.merchantId,
   };
   try {
-    // Try to read the existing managed object by _id
-    try {
-      await instance.idm.managed.readManagedObject('bravo_user', userId);
-    } catch {
-      // Does not exist — create it (include password only on initial creation).
-      const moCreate = { ...moBase, userPassword };
+    // IDM requires _id to be a UUID; look up by userName instead of user.id.
+    const existing = await instance.idm.managed.queryManagedObjects(
+      'bravo_user',
+      `userName eq "${user.userName}"`,
+      ['_id', 'userName'],
+    );
+    if (existing.length === 0) {
+      // Does not exist — create without custom _id so IDM auto-generates a UUID.
+      const moCreate = { ...moBase, password: userPassword };
       await instance.idm.managed.createManagedObject(
         'bravo_user',
         moCreate as Parameters<typeof instance.idm.managed.createManagedObject>[1],
-        userId,
       );
       console.log(`[${realm}] BravoUser created: ${userId} (${user.userName})`);
       return { action: 'created', resourceType, realm, id: userId };
     }
     // Exists — update profile fields only; skip password to prevent accidental
-    // credential resets after initial provisioning.
+    // credential resets after initial provisioning. IDM PUT requires _id in body.
+    const existingUuid = existing[0]!._id as string;
     await instance.idm.managed.updateManagedObject(
       'bravo_user',
-      userId,
-      moBase as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+      existingUuid,
+      { ...moBase, _id: existingUuid } as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
     );
     console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
     return { action: 'updated', resourceType, realm, id: userId };
@@ -305,20 +332,28 @@ export async function provision(
   config: TenantConfig,
   dryRun: boolean,
 ): Promise<RunSummary> {
-  const { tenantUrl, adminServiceAccountEnv, adminServiceAccountKeyEnv } = config;
+  const { tenantUrl } = config;
 
-  const svcAccountId = process.env[adminServiceAccountEnv];
-  const svcAccountJwk = process.env[adminServiceAccountKeyEnv];
+  const profile = await frodo.conn.getConnectionProfileByHost(tenantUrl);
 
-  if (!svcAccountId || !svcAccountJwk) {
-    const missing: string[] = [];
-    if (!svcAccountId) missing.push(adminServiceAccountEnv);
-    if (!svcAccountJwk) missing.push(adminServiceAccountKeyEnv);
+  const svcAccountId = profile.svcacctId;
+  if (!svcAccountId) {
     throw new Error(
-      `Missing required environment variable(s): ${missing.join(', ')}. ` +
-        `Set them before running this script.`,
+      `Frodo connection profile for '${tenantUrl}' is missing svcacctId. ` +
+        `Run 'frodo conn save ${tenantUrl}' to populate the connection profile.`,
     );
   }
+
+  const rawJwk: unknown = profile.svcacctJwk;
+  if (!rawJwk) {
+    throw new Error(
+      `Frodo connection profile for '${tenantUrl}' is missing svcacctJwk. ` +
+        `Run 'frodo conn save ${tenantUrl}' to populate the connection profile.`,
+    );
+  }
+  // Normalise: frodo-lib decryption may return a JSON string or a parsed object.
+  const svcAccountJwk: string =
+    typeof rawJwk === 'string' ? rawJwk : JSON.stringify(rawJwk);
 
   // Load inputs
   const alphaClients = loadAlphaOAuth2Clients();

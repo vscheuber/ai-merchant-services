@@ -1,7 +1,5 @@
 export interface TenantConfig {
   tenantUrl: string;
-  adminServiceAccountEnv: string;
-  adminServiceAccountKeyEnv: string;
 }
 
 // frodo_read returns {inherited, value} wrappers — handle in flattenWrapped
@@ -43,7 +41,7 @@ export interface OAuth2ClientPayload {
 export interface AIAgentIdentityAttributes {
   name: string;
   description: string;
-  customAttributes: null | Record<string, unknown>;
+  customAttributes?: Record<string, unknown>;
 }
 
 export interface AIAgentPayload extends OAuth2ClientPayload {
@@ -53,13 +51,11 @@ export interface AIAgentPayload extends OAuth2ClientPayload {
 export interface TrustedJwtIssuerPayload {
   _id?: string;
   issuer: string;
-  jwkSet: null;
+  jwkSet?: Record<string, unknown>;
   jwksCacheTimeout: number;
   jwkStoreCacheMissCacheTime: number;
-  jwksUri: string;
-  resourceOwnerIdentity: string;
-  trustedIssuerClaims: string[];
-  claimsToUserMapping: Record<string, unknown>;
+  jwksUri?: string;
+  resourceOwnerIdentityClaim: string;
   [key: string]: unknown;
 }
 

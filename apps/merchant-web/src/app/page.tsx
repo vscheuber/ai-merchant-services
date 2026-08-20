@@ -21,6 +21,7 @@ import {
   CardDescription,
   CardContent,
 } from '@acme/ui';
+import { MerchantHeaderActions } from '../components/merchant-header-actions';
 
 const nav = [
   { label: 'Products', href: '/products' },
@@ -65,7 +66,7 @@ const categories: readonly CategoryTile[] = [
 
 export default function Page() {
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<MerchantHeaderActions />}>
       <section className="space-y-4">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
           Fictional demo storefront
@@ -74,9 +75,8 @@ export default function Page() {
           Everyday tech, ready to ship.
         </h1>
         <p className="max-w-2xl text-lg text-muted-foreground">
-          Northwind Retail is the demo merchant used to exercise the Acme Payments agentic-commerce
-          POC. Browse the catalog, add items to a cart, or ask the Acme Assist chat overlay in the
-          corner for help finding what you need.
+          Browse the catalog, add items to a cart, or ask the shopping assistant for help finding
+          what you need.
         </p>
         <div className="flex flex-wrap gap-3 pt-2">
           <Link href="/products" className={buttonVariants()}>
@@ -118,11 +118,10 @@ export default function Page() {
           Role in the flow
         </h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Northwind Retail keeps the shopping funnel end-to-end. The Acme Assist chatbot is embedded
-          as an overlay via a single <code className="rounded bg-muted px-1">&lt;script&gt;</code>{' '}
-          tag in the site layout, so shoppers get an assistant-in-page without being handed off to a
-          third-party surface. Every chatbot-initiated payment still needs an explicit in-chat
-          confirmation (human-in-the-loop is mandatory).
+          A shopping assistant is embedded on every page via a single{' '}
+          <code className="rounded bg-muted px-1">&lt;script&gt;</code> tag, so you get
+          recommendations and checkout help without leaving the store. Every assistant-initiated
+          payment still requires an explicit in-chat confirmation.
         </p>
       </section>
     </AppShell>

@@ -1,13 +1,13 @@
 // Account page — requires an authenticated Auth.js session.
 //
 // Fetches live loyalty and wallet data from payment-api. Before making those
-// calls the server exchanges the bravo access_token from the Auth.js session
-// for an alpha realm token (via getAlphaToken), because payment-api only
-// accepts alpha realm Bearer tokens. Both fetches are best-effort: if the
+// calls the server exchanges the merchant access_token from the Auth.js session
+// for an payment realm token (via getPaymentToken), because payment-api only
+// accepts payment realm Bearer tokens. Both fetches are best-effort: if the
 // exchange or the payment-api call fails the page renders with graceful
 // "unavailable" fallbacks rather than crashing.
 //
-// The OIDC subject identifier (session.userId — the AIC bravo_user _id, e.g.
+// The OIDC subject identifier (session.userId — the AIC merchant_user _id, e.g.
 // "user_ada") is used as the payment-api userId parameter.
 //
 // Next.js App Router requires a default export.
@@ -16,7 +16,8 @@ import { redirect } from 'next/navigation'
 import type { LoyaltyBalance, Merchant, WalletCard } from '@acme/shared'
 import { AppShell, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@acme/ui'
 import { auth } from '../../auth'
-import { getAlphaToken } from '../../lib/alpha-token'
+import { getPaymentToken } from '../../lib/alpha-token'
+import { MerchantHeaderActions } from '../../components/merchant-header-actions'
 
 const nav = [
   { label: 'Products', href: '/products' },
@@ -52,8 +53,8 @@ function brandLabel(brand: WalletCard['brand']): string {
 export default async function AccountPage() {
   const session = await auth()
 
-  // Redirect to the AIC bravo realm login if there is no active session.
-  if (!session) {
+  // Account data is private: require an authenticated merchant session.
+  if (!session?.accessToken) {
     redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/account'))
   }
 
@@ -61,13 +62,13 @@ export default async function AccountPage() {
   const userId = session.userId ?? ''
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
 
-  // Exchange the bravo access_token for an alpha token so payment-api calls
+  // Exchange the merchant access_token for an payment token so payment-api calls
   // are accepted. Both the loyalty and wallet fetches below are best-effort;
   // if the exchange fails (e.g. AIC not configured in this environment) the
   // page degrades gracefully with "unavailable" fallbacks.
   let token = ''
   try {
-    token = await getAlphaToken(session.accessToken ?? '', session.user)
+    token = await getPaymentToken(session.accessToken ?? '', session.user)
   } catch {
     // Non-blocking — graceful fallbacks are rendered below.
   }
@@ -102,7 +103,7 @@ export default async function AccountPage() {
   }
 
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<MerchantHeaderActions />}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Account</p>
         <h1 className="text-3xl font-semibold tracking-tight">My Account</h1>

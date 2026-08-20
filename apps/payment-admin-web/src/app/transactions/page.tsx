@@ -68,7 +68,7 @@ export default async function TransactionsPage() {
 
   // Redirect to the AIC alpha realm login if there is no active session.
   if (!session) {
-    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/transactions'))
+    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/admin/transactions'))
   }
 
   const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'

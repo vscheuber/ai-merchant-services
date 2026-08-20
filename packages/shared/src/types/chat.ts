@@ -39,7 +39,7 @@ export interface ProposedPurchase {
 /**
  * Body sent by the client (embed.js or merchant-web) to `POST /api/chat`.
  *
- * `accessToken` carries the alpha realm user token (Step 1 result) so the
+ * `accessToken` carries the payment realm user token (Step 1 result) so the
  * chatbot-agent server can perform Step 2 without a separate round-trip.
  *
  * When `confirmedAt` and `proposedPurchase` are both present, the chatbot-agent
@@ -49,7 +49,7 @@ export interface ProposedPurchase {
 export interface ChatRequest {
   /** Conversation history to send to the LLM. */
   messages: readonly ChatMessage[];
-  /** Alpha realm access token for the authenticated shopper, if available. */
+  /** Payment realm access token for the authenticated shopper, if available. */
   accessToken?: string;
   /**
    * ISO-8601 timestamp of the shopper's "Confirm & pay" button click.
@@ -62,6 +62,10 @@ export interface ChatRequest {
    * Required when `confirmedAt` is present.
    */
   proposedPurchase?: ProposedPurchase;
+  /** Enable demo-only token-exchange diagnostics for this request. */
+  trace?: boolean;
+  /** Include raw token strings in diagnostics only after explicit opt-in. */
+  traceRaw?: boolean;
 }
 
 /**
@@ -80,4 +84,6 @@ export interface ChatResponse {
    * slot and disable further input until the shopper confirms or dismisses.
    */
   proposedPurchase?: ProposedPurchase;
+  /** Token-exchange diagnostics returned only when requested by the demo UI. */
+  trace?: import('./token-trace').TokenTrace;
 }

@@ -1,6 +1,6 @@
-// Checkout proxy route — reads the Auth.js session, exchanges the bravo
-// access_token for an alpha realm token, and forwards the checkout request
-// to the payment-api using the alpha token as Bearer.
+// Checkout proxy route — reads the Auth.js session, exchanges the merchant
+// access_token for an payment realm token, and forwards the checkout request
+// to the payment-api using the payment token as Bearer.
 //
 // POST /api/checkout (merchant-web internal proxy)
 //   Body (from client): { cart: Cart, selectedCardId: string }
@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { Cart } from '@acme/shared'
 
 import { auth } from '../../../auth'
-import { getAlphaToken } from '../../../lib/alpha-token'
+import { getPaymentToken } from '../../../lib/alpha-token'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // --- Auth guard ---
@@ -64,14 +64,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  // --- Exchange bravo token for alpha token before calling payment-api ---
-  // payment-api only accepts alpha realm tokens; using the bravo token would
+  // --- Exchange merchant token for payment token before calling payment-api ---
+  // payment-api only accepts payment realm tokens; using the merchant token would
   // result in HTTP 401 from the payment-api JWT middleware.
-  let alphaToken: string
+  let paymentToken: string
   try {
-    alphaToken = await getAlphaToken(session.accessToken, session.user)
+    paymentToken = await getPaymentToken(session.accessToken, session.user)
   } catch (err) {
-    console.error('[checkout proxy] Failed to obtain alpha token:', err)
+    console.error('[checkout proxy] Failed to obtain payment token:', err)
     return NextResponse.json(
       { error: 'service_unavailable', message: 'Unable to obtain a payment authorization token.' },
       { status: 503 },
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${alphaToken}`,
+        Authorization: `Bearer ${paymentToken}`,
       },
       body: JSON.stringify(checkoutBody),
     })

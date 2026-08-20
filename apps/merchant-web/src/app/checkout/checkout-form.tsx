@@ -34,6 +34,7 @@ import {
   buttonVariants,
 } from '@acme/ui'
 import { useCart } from '../../components/cart-provider'
+import { ClientHeaderActions } from '../../components/client-header-actions'
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ function brandLabel(brand: WalletCard['brand']): string {
 export interface CheckoutFormProps {
   /** Saved wallet cards fetched server-side from payment-api. */
   walletCards: WalletCard[]
-  /** Bravo realm user id (session.userId), forwarded to payment-api. */
+  /** Merchant identity id (session.userId), forwarded to payment-api. */
   userId: string
 }
 
@@ -88,7 +89,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
   // replaces this view; cart is empty but result is shown.
   if (items.length === 0 && result === null) {
     return (
-      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<ClientHeaderActions />}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
           <h1 className="text-3xl font-semibold tracking-tight">Your cart is empty</h1>
@@ -122,7 +123,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
         : `Payment ${result.status}`
 
     return (
-      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<ClientHeaderActions />}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
           <h1 className="text-3xl font-semibold tracking-tight">{statusHeading}</h1>

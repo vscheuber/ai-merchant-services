@@ -30,7 +30,7 @@ export interface TransactionItem {
 export interface Transaction {
   /** Stable synthetic id, e.g. `txn_00001`. */
   id: string;
-  /** Merchant-side (bravo) user id who initiated the transaction. */
+  /** Merchant-side (merchant-provider) user id who initiated the transaction. */
   userId: string;
   /** Owning merchant. */
   merchantId: string;
@@ -46,7 +46,7 @@ export interface Transaction {
   createdAt: string;
   /** Line items. */
   items: readonly TransactionItem[];
-  /** Payment-side (alpha) identity id, if the JIT provisioning ran. */
+  /** Payment-side (payment-provider) identity id, if the JIT provisioning ran. */
   paymentIdentityId?: string;
   /** Consent record — required for every transaction in Phase 1. */
   consent: Consent;

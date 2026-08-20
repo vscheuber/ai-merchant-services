@@ -9,6 +9,7 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@acme/ui', '@acme/shared'],
+  basePath: '/admin',
 };
 
 export default nextConfig;
