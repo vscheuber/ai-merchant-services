@@ -116,6 +116,24 @@ type FrodoInstance = ReturnType<typeof frodo.createInstanceWithServiceAccount>;
 // Upsert helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * If OAUTH2_SECRET_<CLIENT_ID_UPPERCASED> is set, inject it as the client
+ * secret (coreOAuth2ClientConfig.userpassword). This lets operators set known
+ * secrets via config/aic/.env without committing credentials in JSON files.
+ */
+function injectClientSecret(clientId: string, payload: OAuth2ClientPayload): OAuth2ClientPayload {
+  const envKey = `OAUTH2_SECRET_${clientId.toUpperCase().replace(/-/g, '_')}`;
+  const secret = process.env[envKey];
+  if (!secret) return payload;
+  return {
+    ...payload,
+    coreOAuth2ClientConfig: {
+      ...(payload.coreOAuth2ClientConfig ?? {}),
+      userpassword: secret,
+    },
+  };
+}
+
 async function upsertOAuth2Client(
   clientId: string,
   desired: OAuth2ClientPayload,
@@ -127,6 +145,7 @@ async function upsertOAuth2Client(
   if (dryRun) {
     return { action: 'dry-run', resourceType, realm, id: clientId };
   }
+  const desiredWithSecret = injectClientSecret(clientId, desired);
   try {
     let live: Record<string, unknown>;
     try {
@@ -136,13 +155,13 @@ async function upsertOAuth2Client(
     } catch {
       await instance.oauth2oidc.client.createOAuth2Client(
         clientId,
-        desired as Parameters<typeof instance.oauth2oidc.client.createOAuth2Client>[1],
+        desiredWithSecret as Parameters<typeof instance.oauth2oidc.client.createOAuth2Client>[1],
       );
       console.log(`[${realm}] OAuth2Client created: ${clientId}`);
       return { action: 'created', resourceType, realm, id: clientId };
     }
     const flat = flattenWrapped(live) as Record<string, unknown>;
-    const merged = deepMerge(flat, desired as Record<string, unknown>);
+    const merged = deepMerge(flat, desiredWithSecret as Record<string, unknown>);
     await instance.oauth2oidc.client.updateOAuth2Client(
       clientId,
       merged as Parameters<typeof instance.oauth2oidc.client.updateOAuth2Client>[1],
@@ -289,12 +308,12 @@ async function upsertBravoUser(
       return { action: 'created', resourceType, realm, id: userId };
     }
     // Exists — update profile fields only; skip password to prevent accidental
-    // credential resets after initial provisioning.
+    // credential resets after initial provisioning. IDM PUT requires _id in body.
     const existingUuid = existing[0]._id as string;
     await instance.idm.managed.updateManagedObject(
       'bravo_user',
       existingUuid,
-      moBase as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+      { ...moBase, _id: existingUuid } as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
     );
     console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
     return { action: 'updated', resourceType, realm, id: userId };
