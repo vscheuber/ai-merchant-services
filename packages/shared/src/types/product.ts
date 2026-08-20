@@ -21,6 +21,10 @@ export interface Product {
   category: ProductCategory;
   /** Price in the merchant's currency, expressed in major units (e.g. dollars). */
   price: number;
+  /** Optional member-only price; the public price remains visible to guests. */
+  memberPrice?: number;
+  /** Whether the member price requires an authenticated shopper account. */
+  membersOnly?: boolean;
   /** ISO 4217 currency code, e.g. `USD`. */
   currency: string;
   /** Public URL/path to the product image. Placeholder in the scaffold. */

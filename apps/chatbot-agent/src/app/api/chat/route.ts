@@ -1,8 +1,8 @@
 // POST /api/chat — Acme Assist chatbot powered by OpenAI GPT-4.1-mini.
 //
 // Task 10 additions on top of the Task 8 LLM integration:
-//   1. Accepts `accessToken` (alpha realm user token) in the request body.
-//   2. Step 2 token exchange: exchanges the alpha token for a chatbot-agent
+//   1. Accepts `accessToken` (payment realm user token) in the request body.
+//   2. Step 2 token exchange: exchanges the payment token for a chatbot-agent
 //      agent token using `chatbot-agent` client credentials and the
 //      `urn:ietf:params:oauth:grant-type:token-exchange` grant.
 //   3. Fetches shopper context (loyalty balance + wallet cards) from payment-api
@@ -24,6 +24,8 @@ import type {
   ChatRequest,
   ChatResponse,
   ChatMessage,
+  TokenTrace,
+  TokenTraceStage,
   Product,
   LoyaltyBalance,
   WalletCard,
@@ -50,7 +52,7 @@ const openai: OpenAI | null = process.env.OPENAI_API_KEY
 /**
  * Decode a JWT payload without verifying the signature.
  *
- * We do not need to verify here: the alpha token was already validated by AIC
+ * We do not need to verify here: the payment token was already validated by AIC
  * during the token exchange step (Step 2 will fail with an invalid token).
  * We only need the `sub` claim to scope the payment-api calls.
  */
@@ -70,17 +72,21 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 // ── Step 2 token exchange ────────────────────────────────────────────────────
 
 /**
- * Exchange an alpha realm user token for a chatbot-agent agent token.
+ * Exchange an payment realm user token for a chatbot-agent agent token.
  *
  * Uses the `chatbot-agent` client credentials and the RFC 8693 token-exchange
- * grant against the AIC alpha realm token endpoint.
+ * grant against the AIC payment realm token endpoint.
  *
  * Reads env vars: `AIC_ALPHA_TOKEN_ENDPOINT`, `CHATBOT_AGENT_CLIENT_ID`,
  * `CHATBOT_AGENT_CLIENT_SECRET`.
  *
  * @returns The `access_token` string for the agent token.
  */
-async function exchangeForAgentToken(alphaToken: string): Promise<string> {
+async function exchangeForAgentToken(
+  paymentToken: string,
+  trace?: TokenTraceStage[],
+  traceRaw = false,
+): Promise<string> {
   const tokenEndpoint = process.env.AIC_ALPHA_TOKEN_ENDPOINT;
   const clientId = process.env.CHATBOT_AGENT_CLIENT_ID;
   const clientSecret = process.env.CHATBOT_AGENT_CLIENT_SECRET;
@@ -95,13 +101,23 @@ async function exchangeForAgentToken(alphaToken: string): Promise<string> {
   const tokenResponse = await exchangeToken(
     {
       grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-      subject_token: alphaToken,
+      subject_token: paymentToken,
       subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
       requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+      scope: 'openid profile email',
     },
     { tokenEndpoint, clientId, clientSecret },
   );
 
+  trace?.push({
+    name: 'step-2-payment-to-agent',
+    status: 'succeeded',
+    endpoint: tokenEndpoint,
+    tokenType: tokenResponse.token_type,
+    scope: tokenResponse.scope,
+    rawToken: traceRaw ? tokenResponse.access_token : undefined,
+    claims: decodeJwtPayload(tokenResponse.access_token),
+  });
   return tokenResponse.access_token;
 }
 
@@ -158,7 +174,7 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null): st
       : northwindProducts
           .map(
             (p) =>
-              `- ${p.name} (SKU: ${p.sku}, Price: $${p.price.toFixed(2)} ${p.currency}, Category: ${p.category})${p.description ? `: ${p.description}` : ''}`,
+              `- ${p.name} (SKU: ${p.sku}, Public price: $${p.price.toFixed(2)} ${p.currency}${p.membersOnly && p.memberPrice !== undefined ? `, member price: $${p.memberPrice.toFixed(2)} ${p.currency}` : ''}, Category: ${p.category})${p.description ? `: ${p.description}` : ''}`,
           )
           .join('\n');
 
@@ -179,12 +195,12 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null): st
     ].join('\n');
   } else {
     shopperSection =
-      'No shopper session is active at this time. Loyalty status and saved payment cards will\n' +
-      'appear here once the shopper is authenticated.';
+      'This is a guest shopping session. Do not claim to know private loyalty or payment details.\n' +
+      'Personalised account features and checkout with saved cards require the shopper to sign in.';
   }
 
   return [
-    'You are Acme Assist, a helpful AI shopping assistant embedded on the Northwind Retail website.',
+    'You are the Shopping Assistant, a helpful AI shopping assistant embedded on the Northwind Retail website.',
     '',
     '## Merchant: Northwind Retail',
     'Northwind Retail is a premium electronics retailer specialising in laptops, smartphones,',
@@ -198,6 +214,9 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null): st
     '',
     '## Instructions',
     '- Help shoppers discover and evaluate products from the Northwind catalog above.',
+    '- Guest shoppers may browse and ask product questions without signing in.',
+    '- Members-only deals require an authenticated shopper session; guests may see the public price but must be told to sign in to unlock the member price.',
+    '- Do not propose or complete a purchase without an authenticated shopper session.',
     '- When recommending a product, always include the exact product name and SKU.',
     '- If a shopper expresses intent to purchase a specific product, confirm the product name,',
     '  SKU, and price before proceeding.',
@@ -316,15 +335,18 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const chatRequest = body as ChatRequest;
   const incomingMessages = Array.from(chatRequest.messages ?? []);
-  const alphaToken = chatRequest.accessToken;
+  const paymentToken = chatRequest.accessToken;
   const confirmedAt = chatRequest.confirmedAt;
   const incomingProposedPurchase = chatRequest.proposedPurchase;
+  const traceEnabled = chatRequest.trace === true;
+  const traceRaw = chatRequest.traceRaw === true;
+  const traceStages: TokenTraceStage[] = [];
 
   // ── Step 2 token exchange + user context ─────────────────────────────────
   //
-  // When `alphaToken` is present:
-  //   1. Decode the alpha JWT to extract `sub` (userId).
-  //   2. Exchange the alpha token for a chatbot-agent agent token (Step 2).
+  // When `paymentToken` is present:
+  //   1. Decode the payment JWT to extract `sub` (userId).
+  //   2. Exchange the payment token for a chatbot-agent agent token (Step 2).
   //   3. Fetch the shopper's loyalty balance + wallet cards from payment-api.
   //
   // All three steps are best-effort for the normal chat path — a failure in
@@ -336,25 +358,38 @@ export async function POST(request: Request): Promise<NextResponse> {
   let userId: string | null = null;
   let userCtx: UserContext | null = null;
 
-  if (alphaToken) {
-    // Decode alpha token payload to extract `sub`.
+  // Anonymous sessions are allowed: without an payment token the assistant can
+  // still answer catalog questions, but cannot access private context or pay.
+  if (paymentToken) {
+    // Decode payment token payload to extract `sub`.
     try {
-      const payload = decodeJwtPayload(alphaToken);
+      const payload = decodeJwtPayload(paymentToken);
       const sub = payload['sub'];
       userId = typeof sub === 'string' ? sub : null;
     } catch {
       // Non-fatal: proceed without userId; context fetch will be skipped.
     }
 
-    // Step 2: exchange alpha user token for chatbot-agent agent token.
+    // Step 2: exchange payment user token for chatbot-agent agent token.
     // This is best-effort for the normal chat path — a failure degrades to an
     // unauthenticated system prompt (no loyalty/wallet context) rather than an
     // error response, matching the in-code specification at lines 330-332.
     // The checkout confirmation path checks for agentToken below and returns
     // 401 if it is absent.
     try {
-      agentToken = await exchangeForAgentToken(alphaToken);
+      agentToken = await exchangeForAgentToken(
+        paymentToken,
+        traceEnabled ? traceStages : undefined,
+        traceRaw,
+      );
     } catch (err) {
+      if (traceEnabled) {
+        traceStages.push({
+          name: 'step-2-payment-to-agent',
+          status: 'failed',
+          message: err instanceof Error ? err.message.slice(0, 300) : 'Token exchange failed',
+        })
+      }
       // Non-fatal on the normal chat path: clear agent token and continue with
       // an unauthenticated system prompt. Log the failure for operator visibility.
       console.warn(
@@ -385,8 +420,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!agentToken || !userId) {
       return NextResponse.json(
         {
-          error: 'unauthorized',
-          message: 'A valid accessToken is required to confirm a purchase.',
+          error: 'login_required',
+          message: 'Please sign in before confirming a purchase.',
         },
         { status: 401 },
       );
@@ -555,6 +590,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   const response: ChatResponse = {
     message: responseMessage,
     ...(proposedPurchaseOut !== undefined ? { proposedPurchase: proposedPurchaseOut } : {}),
+    ...(traceEnabled
+      ? {
+          trace: {
+            requestId: crypto.randomUUID(),
+            capturedAt: new Date().toISOString(),
+            stages: traceStages,
+          } satisfies TokenTrace,
+        }
+      : {}),
   };
 
   return NextResponse.json(response);

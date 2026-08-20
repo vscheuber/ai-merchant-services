@@ -14,7 +14,7 @@ export type CheckoutSessionStatus = 'pending' | 'authorized' | 'captured' | 'dec
 export interface CheckoutSession {
   /** Stable synthetic id, e.g. `chk_00001`. */
   id: string;
-  /** Merchant-side (bravo) user id who initiated the session. */
+  /** Merchant-side (merchant-provider) user id who initiated the session. */
   userId: string;
   /** Owning merchant. */
   merchantId: string;

@@ -12,6 +12,7 @@ export interface AppShellProps {
   brand: string;
   tagline?: string;
   nav?: readonly AppShellNavItem[];
+  actions?: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
@@ -29,6 +30,7 @@ export function AppShell({
   brand,
   tagline,
   nav,
+  actions,
   footer,
   className,
   children,
@@ -64,6 +66,7 @@ export function AppShell({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
+            {actions}
             <ThemeToggle />
           </div>
         </div>

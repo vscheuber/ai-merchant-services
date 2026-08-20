@@ -1,5 +1,5 @@
 /*
- * Acme Assist — interactive chat overlay.
+ * Shopping assistant — interactive chat overlay.
  *
  * Served as a static asset from `/embed.js`. Merchant sites include it via:
  *
@@ -11,7 +11,7 @@
  * embed cannot ES-import from a workspace package at runtime.
  *
  * Interactive behaviour (Task 11):
- *   - On open: fetches a short-lived alpha realm token from the merchant-web
+ *   - On open: fetches a short-lived payment-provider token from the merchant-web
  *     token proxy (`GET /api/chatbot/token`). 401 → shows "Please sign in".
  *   - Send button + Enter key: posts `{ messages, accessToken }` to the
  *     chatbot-agent `/api/chat` endpoint and renders the assistant response.
@@ -25,14 +25,62 @@
   'use strict';
 
   var MOUNT_ID = 'acme-assist-overlay-root';
-  var TOKEN_URL = 'http://localhost:3000/api/chatbot/token';
-  var CHAT_URL = 'http://localhost:3004/api/chat';
+
+  // Read chatbot display name from window.CHATBOT_CONFIG set by the host page.
+  var CHATBOT_NAME =
+    (window.CHATBOT_CONFIG && window.CHATBOT_CONFIG.name) || 'Shopping Assistant';
+
+  // Derive the chatbot API base URL from this script's own src.
+  // document.currentScript is null for async scripts, so we search the DOM.
+  var _selfScript = null;
+  var _allScripts = document.querySelectorAll('script[src]');
+  for (var _si = 0; _si < _allScripts.length; _si++) {
+    if (_allScripts[_si].src.indexOf('embed.js') !== -1) {
+      _selfScript = _allScripts[_si];
+      break;
+    }
+  }
+  var _chatbotBase = _selfScript
+    ? _selfScript.src.replace(/\/embed\.js([?#].*)?$/, '')
+    : '';
+
+  // The host page owns the token proxy; the chatbot API is served by this bundle's host.
+  var TOKEN_URL = (window.CHATBOT_CONFIG && window.CHATBOT_CONFIG.tokenUrl) || '/api/chatbot/token';
+  var CHAT_URL =
+    (window.CHATBOT_CONFIG && window.CHATBOT_CONFIG.chatUrl) ||
+    (_chatbotBase ? _chatbotBase + '/api/chat' : '/chatbot/api/chat');
+  var traceEnabled = false;
+  var traceRaw = false;
+
+  function syncTraceSettings() {
+    var detail = null;
+    try {
+      traceEnabled = window.sessionStorage.getItem('northwind-demo-token-trace') === 'on';
+      detail = window.sessionStorage.getItem('northwind-demo-token-trace-raw') === 'on';
+    } catch (_) {
+      // Storage may be unavailable in a restrictive embed context.
+    }
+    traceRaw = Boolean(detail);
+  }
+
+  window.addEventListener('chatbot:trace-toggle', function (event) {
+    var detail = event && event.detail;
+    traceEnabled = Boolean(detail && detail.enabled);
+    traceRaw = Boolean(detail && detail.rawTokens);
+    try {
+      window.sessionStorage.setItem('northwind-demo-token-trace', traceEnabled ? 'on' : 'off');
+      window.sessionStorage.setItem('northwind-demo-token-trace-raw', traceRaw ? 'on' : 'off');
+    } catch (_) {
+      // Storage may be unavailable in a restrictive embed context.
+    }
+  });
 
   // ── Module-level state ─────────────────────────────────────────────────────
   // Preserved across open/close cycles so conversation is not lost on minimise.
 
-  /** Alpha realm access token; null until the token proxy call succeeds. */
+  /** Payment realm access token; null until the token proxy call succeeds. */
   var accessToken = null;
+  var guestSession = true;
 
   /** True while a token fetch is in-flight — prevents duplicate requests. */
   var tokenFetching = false;
@@ -331,7 +379,7 @@
   // ── Token fetch ────────────────────────────────────────────────────────────
 
   /**
-   * Fetch a short-lived alpha realm access token from the merchant-web token
+   * Fetch a short-lived payment-provider access token from the merchant-web token
    * proxy (`GET /api/chatbot/token`).
    *
    * On HTTP 401: appends a "please sign in" assistant bubble; textarea stays
@@ -340,30 +388,52 @@
    * from the textarea, enabling the shopper to start typing.
    */
   function fetchAccessToken() {
-    if (tokenFetching) return;
+    if (tokenFetching || accessToken) return;
     tokenFetching = true;
 
-    fetch(TOKEN_URL)
+    fetch(TOKEN_URL, {
+      headers: traceEnabled
+        ? {
+            'x-demo-token-trace': 'on',
+            'x-demo-token-trace-raw': traceRaw ? 'on' : 'off',
+          }
+        : undefined,
+    })
       .then(function (res) {
-        if (res.status === 401) {
-          appendBubble(
-            'assistant',
-            'Please sign in to use Acme Assist. Visit your account page to log in, then refresh this page.',
-          );
-          return null;
-        }
-        if (!res.ok) {
-          appendBubble(
-            'assistant',
-            'Unable to start a session. Please refresh the page and try again.',
-          );
-          return null;
-        }
-        return res.json();
+        return res.json().then(function (data) {
+          if (data && data.trace) {
+            window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+          }
+          if (res.status === 401) {
+            guestSession = true;
+            if (activeTextarea) activeTextarea.removeAttribute('readonly');
+            appendBubble(
+              'assistant',
+              'Your shopping session has expired. Please sign in again to use personalised features, or continue as a guest for product recommendations.',
+            );
+            return null;
+          }
+          if (!res.ok) {
+            appendBubble(
+              'assistant',
+              'Unable to start a session. Please refresh the page and try again.',
+            );
+            return null;
+          }
+          return data;
+        });
       })
       .then(function (data) {
         if (!data) return;
-        accessToken = data.accessToken;
+        accessToken = data.accessToken || null;
+        guestSession = !accessToken;
+        if (!accessToken) {
+          if (activeTextarea) activeTextarea.removeAttribute('readonly');
+          return;
+        }
+        if (data.trace) {
+          window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+        }
         if (activeTextarea) {
           activeTextarea.removeAttribute('readonly');
           activeTextarea.focus();
@@ -372,7 +442,7 @@
       .catch(function () {
         appendBubble(
           'assistant',
-          'Unable to connect to Acme Assist. Please refresh the page and try again.',
+          'Unable to connect. Please refresh the page and try again.',
         );
       })
       .then(function () {
@@ -390,7 +460,7 @@
    */
   function sendMessage(text) {
     text = String(text).trim();
-    if (!text || !accessToken) return;
+    if (!text) return;
 
     // Optimistically render and record the user's message.
     appendBubble('user', text);
@@ -408,14 +478,32 @@
     fetch(CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messageHistory, accessToken: accessToken }),
+      body: JSON.stringify({
+        messages: messageHistory,
+        ...(accessToken ? { accessToken: accessToken } : {}),
+        trace: traceEnabled,
+        traceRaw: traceRaw,
+      }),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
+        if (!res.ok) {
+          return res.json().then(function (data) {
+            if (data && data.trace) {
+              window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+            }
+            if (res.status === 401 && data && data.error === 'login_required') {
+              appendBubble('assistant', 'Please sign in before confirming a purchase.');
+            }
+            throw new Error('Chat API returned ' + String(res.status));
+          });
+        }
         return res.json();
       })
       .then(function (data) {
         if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+        if (data && data.trace) {
+          window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+        }
 
         var content =
           data && data.message && typeof data.message.content === 'string'
@@ -509,14 +597,14 @@
         {
           type: 'button',
           style: launcherStyle,
-          'aria-label': 'Open Acme Assist',
+          'aria-label': 'Open ' + CHATBOT_NAME,
           onclick: function () {
             root.replaceWith(build(true));
           },
         },
         [
           h('span', { text: '\u{1F4AC}', style: { fontSize: '16px' } }),
-          h('span', { text: 'Chat with Acme Assist' }),
+          h('span', { text: 'Chat with ' + CHATBOT_NAME }),
         ],
       );
       root.appendChild(launcher);
@@ -528,7 +616,9 @@
     var listEl = h('ol', { style: listStyle }, [
       bubble(
         'assistant',
-        "Hi! I'm Acme Assist. I can help you find products, check your loyalty balance, and complete purchases with your saved cards.",
+        "Hi! I'm your " +
+          CHATBOT_NAME +
+          '. I can help you find products, check your loyalty balance, and complete purchases with your saved cards.',
       ),
     ]);
     activeBubbleList = listEl;
@@ -553,7 +643,7 @@
       rows: '2',
       placeholder: 'Type a message...',
       readonly: !accessToken,
-      'aria-label': 'Message Acme Assist',
+      'aria-label': 'Message ' + CHATBOT_NAME,
       style: inputStyle,
     });
     activeTextarea = textarea;
@@ -619,19 +709,19 @@
     // ── Full panel ────────────────────────────────────────────────────────────
     var panel = h(
       'section',
-      { 'aria-label': 'Acme Assist chat panel', style: panelStyle },
+      { 'aria-label': CHATBOT_NAME + ' chat panel', style: panelStyle },
       [
         h('header', { style: headerStyle }, [
           h('div', { style: titleWrapStyle }, [
-            h('span', { style: titleStyle, text: 'Acme Assist' }),
-            h('span', { style: subtitleStyle, text: 'Merchant-embedded assistant' }),
+            h('span', { style: titleStyle, text: CHATBOT_NAME }),
+            h('span', { style: subtitleStyle, text: 'Your shopping assistant' }),
           ]),
           h(
             'button',
             {
               type: 'button',
               style: closeBtnStyle,
-              'aria-label': 'Close Acme Assist',
+              'aria-label': 'Close ' + CHATBOT_NAME,
               onclick: function () {
                 root.replaceWith(build(false));
               },
@@ -656,10 +746,25 @@
   }
 
   // ── Mount ──────────────────────────────────────────────────────────────────
+  syncTraceSettings();
+
   function mount() {
     if (document.getElementById(MOUNT_ID)) return;
-    document.body.appendChild(build(true));
+    document.body.appendChild(build(false));
   }
+
+  // Dispatching 'chatbot:open' from the host page opens the chat panel.
+  window.addEventListener('chatbot:open', function () {
+    var existing = document.getElementById(MOUNT_ID);
+    if (existing) {
+      // Already mounted as launcher pill — switch to open panel.
+      if (!existing.querySelector('section')) {
+        existing.replaceWith(build(true));
+      }
+    } else {
+      document.body.appendChild(build(true));
+    }
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mount, { once: true });

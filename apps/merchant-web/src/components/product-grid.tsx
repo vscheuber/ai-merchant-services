@@ -20,18 +20,19 @@ import {
 } from '@acme/ui'
 import { useCart } from './cart-provider'
 
-function formatPrice(product: Product): string {
+function formatPrice(amount: number, currency: string): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: product.currency,
-  }).format(product.price)
+    currency,
+  }).format(amount)
 }
 
 interface ProductGridProps {
   products: readonly Product[]
+  isMember: boolean
 }
 
-export function ProductGrid({ products }: ProductGridProps) {
+export function ProductGrid({ products, isMember }: ProductGridProps) {
   const { addItem } = useCart()
 
   if (products.length === 0) {
@@ -51,11 +52,40 @@ export function ProductGrid({ products }: ProductGridProps) {
               {product.description}
             </CardContent>
             <CardFooter className="flex flex-col items-start gap-2 text-sm">
-              <span className="font-semibold text-foreground">{formatPrice(product)}</span>
+              {product.membersOnly && product.memberPrice !== undefined ? (
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground">
+                    {formatPrice(isMember ? product.memberPrice : product.price, product.currency)}
+                  </span>
+                  {isMember ? (
+                    <span className="text-xs text-muted-foreground line-through">
+                      {formatPrice(product.price, product.currency)}
+                    </span>
+                  ) : null}
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                    Members only
+                  </span>
+                </div>
+              ) : (
+                <span className="font-semibold text-foreground">
+                  {formatPrice(product.price, product.currency)}
+                </span>
+              )}
+              {product.membersOnly && !isMember ? (
+                <p className="text-xs text-muted-foreground">
+                  Sign in to unlock the member price.
+                </p>
+              ) : product.membersOnly ? (
+                <p className="text-xs text-emerald-700">Member price unlocked.</p>
+              ) : null}
               <div className="flex w-full items-center justify-between">
                 <span className="text-xs text-muted-foreground">SKU {product.sku}</span>
-                <Button size="sm" onClick={() => addItem(product)}>
-                  Add to cart
+                <Button
+                  size="sm"
+                  onClick={() => addItem(product)}
+                  disabled={product.membersOnly && !isMember}
+                >
+                  {product.membersOnly && !isMember ? 'Sign in to buy' : 'Add to cart'}
                 </Button>
               </div>
             </CardFooter>

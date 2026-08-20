@@ -309,7 +309,7 @@ async function upsertBravoUser(
     }
     // Exists — update profile fields only; skip password to prevent accidental
     // credential resets after initial provisioning. IDM PUT requires _id in body.
-    const existingUuid = existing[0]._id as string;
+    const existingUuid = existing[0]!._id as string;
     await instance.idm.managed.updateManagedObject(
       'bravo_user',
       existingUuid,

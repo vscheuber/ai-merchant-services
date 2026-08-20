@@ -21,7 +21,9 @@
     "currency": "USD",
     "imageUrl": "/img/products/nw-aero-16-pro.png",
     "description": "16-inch developer workstation with a color-accurate panel and 32 GB RAM.",
-    "stock": 18
+    "stock": 18,
+    "membersOnly": true,
+    "memberPrice": 1699.0
   },
   {
     "id": "prod_co_lp_001",
@@ -45,7 +47,9 @@
     "currency": "USD",
     "imageUrl": "/img/products/nw-pulse-x7.png",
     "description": "6.4-inch OLED smartphone with a triple-lens rear camera.",
-    "stock": 63
+    "stock": 63,
+    "membersOnly": true,
+    "memberPrice": 699.0
   },
   {
     "id": "prod_nw_ph_002",

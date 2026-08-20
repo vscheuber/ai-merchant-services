@@ -1,7 +1,7 @@
 // RFC 8693 token exchange helper for chatbot-agent.
 //
 // Used by `POST /api/chat` (Task 10) to perform Step 2 of the two-step AIC
-// token exchange: exchange an alpha realm user token for a chatbot-agent
+// token exchange: exchange an payment realm user token for a chatbot-agent
 // agent token using the chatbot-agent client credentials.
 //
 // Uses native `fetch` — no external OAuth2 library required.
@@ -10,7 +10,7 @@ import type { TokenExchangeRequest, TokenExchangeResponse } from '@acme/shared';
 
 /** Options required to authenticate the exchange request against the token endpoint. */
 export interface TokenExchangeOptions {
-  /** Token endpoint URL, e.g. `https://idc.scheuber.io/am/oauth2/realms/root/realms/alpha/access_token`. */
+  /** Token endpoint URL, e.g. `https://idc.scheuber.io/am/oauth2/realms/root/realms/payment/access_token`. */
   tokenEndpoint: string;
   /** OAuth2 client_id used to authenticate the exchange request. */
   clientId: string;

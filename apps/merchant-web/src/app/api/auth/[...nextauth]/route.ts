@@ -7,7 +7,7 @@
 //   GET  /api/auth/signout         — renders the sign-out confirmation page
 //   POST /api/auth/signout         — destroys the session and redirects
 //
-// The AIC bravo realm's merchant-web OAuth2 client callback URL is configured as
+// The AIC merchant realm's merchant-web OAuth2 client callback URL is configured as
 // http://localhost:3000/api/auth/callback/aic which matches this route.
 //
 // Named re-export pattern is required by Next.js App Router route handlers.
