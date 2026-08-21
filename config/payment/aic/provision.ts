@@ -379,14 +379,16 @@ function buildAIAgentCreatePayload(
     // The AIC endpoint requires the flattened identity attributes on the
     // agent payload as well as the nested identity consumed by Frodo's
     // includeAgentIdentity path.
-    aiAgentIdentityAttributes: stripSensitivePayload(identityAttributes),
+    aiAgentIdentityAttributes: stripSensitivePayload({
+      oauth2ClientId: agentId,
+      ...identityAttributes,
+      customAttributes: identityAttributes.customAttributes ?? {},
+    }),
     _aiAgentIdentity: {
       oauth2ClientId: agentId,
       name: identityAttributes.name,
       description: identityAttributes.description,
-      ...(identityAttributes.customAttributes
-        ? { customAttributes: identityAttributes.customAttributes }
-        : {}),
+      customAttributes: identityAttributes.customAttributes ?? {},
       _privileges: [],
     },
   };
