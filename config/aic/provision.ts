@@ -268,6 +268,26 @@ function formatFrodoError(error: unknown): string {
   return text && text !== '{}' ? text.slice(0, 8000) : String(error);
 }
 
+function hasHttpStatus(error: unknown, status: number): boolean {
+  const seen = new WeakSet<object>();
+  const visit = (value: unknown): boolean => {
+    if (value === null || typeof value !== 'object') return false;
+    if (seen.has(value)) return false;
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+    if (record['httpStatus'] === status || record['status'] === status) return true;
+    if (
+      typeof record['response'] === 'object' &&
+      record['response'] !== null &&
+      visit(record['response'])
+    ) {
+      return true;
+    }
+    return Array.isArray(record['originalErrors']) && record['originalErrors'].some(visit);
+  };
+  return visit(error);
+}
+
 function stripAgentIdentityReadbackFields(
   obj: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -314,9 +334,13 @@ async function upsertAIAgent(
     let live: Record<string, unknown>;
     try {
       live = (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>;
-    } catch {
-      // Keep identity handling enabled: this creates the first-class IDM
-      // identity and fails the run if that relationship cannot be reconciled.
+    } catch (readError) {
+      if (!hasHttpStatus(readError, 404)) {
+        throw readError;
+      }
+      // Create only after a confirmed not-found response. Permission,
+      // transport, schema, and other read failures must never fall through to
+      // a tenant mutation.
       await instance.agent.createAIAgent(
         agentId,
         createDesired as Parameters<typeof instance.agent.createAIAgent>[1],
