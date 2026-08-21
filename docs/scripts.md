@@ -80,7 +80,8 @@ Resources are declared in realm-specific JSON directories: payment-provider reso
 | Resource type          | IDs                                                                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                                                       |
-| OAuth2Client           | `northwind-chatbot-agent` (new; `chatbot-agent` retained)                                                                    |
+| OAuth2Client           | `chatbot-agent` (legacy client retained; Northwind replacement is opt-in)                                                    |
+| AIAgent                | `northwind-chatbot-agent` (desired identity; migration deletes only its OAuth2 client)                                       |
 | Application            | `payment-api`, `payment-user-web`, `payment-admin-web` — payment-provider applications linked to the matching OAuth2 clients |
 | OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange                                 |
 
@@ -94,9 +95,23 @@ Resources are declared in realm-specific JSON directories: payment-provider reso
 
 Demo users are created with `BRAVO_USER_DEFAULT_PASSWORD` as their initial password. On subsequent runs the profile fields are updated but the password is left unchanged to avoid accidental credential resets.
 
+### Controlled Northwind chatbot migration
+
+`northwind-chatbot-agent` is deliberately absent from `config/payment/aic/inputs/alpha/oauth2-clients.json`; it remains only in `ai-agents.json`. The legacy `chatbot-agent` OAuth2 client is untouched. The replacement is destructive and requires the explicit opt-in flag:
+
+```bash
+# Deterministic plan; no tenant reads or writes (the Frodo connection profile is still loaded)
+pnpm --filter @acme/aic-config provision -- --dry-run
+
+# Apply only after reviewing the plan and approving the generated OAuth2 secret impact
+pnpm --filter @acme/aic-config provision -- --replace-northwind-chatbot-client
+```
+
+Live migration behavior is narrowly gated: it preflight-reads `northwind-chatbot-agent`, verifies the exact ID, deletes only that OAuth2 client, verifies a confirmed 404, then calls Frodo `createAIAgent` with the minimal identity payload. The create response must contain the managed `alpha_aiagent` identity `_id`; the provisioner never generates a fallback UUID. It then reads the agent back with identity and verifies the linked identity ID. If the target OAuth2 client is already absent, the migration stops rather than creating an unverified agent. A successful replacement creates a new client secret as part of the AI Agent identity/client operation; inject or distribute secrets through the existing environment mechanism and never print them.
+
 ### Dry run
 
-Preview what the provisioner would do without making any API calls. The optional prune flag reports its fixed cleanup target without reading or deleting tenant data:
+Preview what the provisioner would do without making any tenant API calls. The optional prune flag reports its fixed cleanup target without reading or deleting tenant data:
 
 ```bash
 pnpm --filter @acme/aic-config provision -- --dry-run
@@ -111,8 +126,8 @@ Output:
   dry-run  OAuth2Client               [/alpha] payment-admin-web
   dry-run  OAuth2Client               [/alpha] payment-api
   dry-run  OAuth2Client               [/alpha] chatbot-agent
-  dry-run  OAuth2Client               [/alpha] northwind-chatbot-agent
-  dry-run  AIAgent                    [/alpha] northwind-chatbot-agent
+  planned  OAuth2Client               [/alpha] northwind-chatbot-agent
+  planned  AIAgent                    [/alpha] northwind-chatbot-agent
   dry-run  Application                [/alpha] payment-api
   dry-run  Application                [/alpha] payment-user-web
   dry-run  Application                [/alpha] payment-admin-web

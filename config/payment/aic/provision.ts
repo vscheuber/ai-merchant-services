@@ -1,6 +1,5 @@
 import { frodo } from '@rockcarver/frodo-lib';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -312,81 +311,227 @@ function hasHttpStatus(error: unknown, status: number): boolean {
   return visit(error);
 }
 
-function stripAgentIdentityReadbackFields(obj: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...obj };
-  // These fields are read-only relationship metadata. Keep the desired
-  // aiAgentIdentityAttributes so Frodo can reconcile the first-class identity.
-  delete result['aiAgentIdentityUid'];
-  delete result['_aiAgentIdentity'];
+const SENSITIVE_PAYLOAD_KEYS = /secret|password|authorization|cookie|jwk|private|credential/i;
+
+function stripSensitivePayload(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => stripSensitivePayload(item));
+  if (typeof value !== 'object' || value === null) return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (!SENSITIVE_PAYLOAD_KEYS.test(key)) result[key] = stripSensitivePayload(entry);
+  }
   return result;
 }
 
-async function upsertAIAgent(
-  agentId: string,
-  desired: AIAgentPayload,
+function getIdentityId(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record['_id'] === 'string' && record['_id'].length > 0) return record['_id'];
+  return undefined;
+}
+
+function extractCreatedIdentityId(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const directIdentity =
+    getIdentityId(record['_aiAgentIdentity']) ?? getIdentityId(record['aiAgentIdentity']);
+  if (directIdentity) return directIdentity;
+  const uid = record['aiAgentIdentityUid'];
+  if (typeof uid === 'string' && uid.length > 0) return uid;
+  if (typeof uid === 'object' && uid !== null) {
+    const uidValue = (uid as Record<string, unknown>)['value'];
+    if (typeof uidValue === 'string' && uidValue.length > 0) return uidValue;
+  }
+  return undefined;
+}
+
+function readBackIdentityId(value: Record<string, unknown>): string | undefined {
+  const nested = getIdentityId(value['_aiAgentIdentity']);
+  if (nested) return nested;
+  return extractCreatedIdentityId(value);
+}
+
+function plannedAgentAction(realm: string): ActionRecord {
+  return {
+    action: 'planned',
+    operation: 'replace',
+    resourceType: 'AIAgent',
+    realm,
+    id: 'northwind-chatbot-agent',
+  };
+}
+
+/**
+ * Replace only the Northwind OAuth2 client with a first-class AI Agent.
+ * This is deliberately separate from ordinary desired-state upserts because
+ * deletion is destructive and must be explicitly opted in.
+ */
+async function replaceNorthwindChatbotClient(
   instance: FrodoInstance,
   realm: string,
   dryRun: boolean,
-): Promise<ActionRecord> {
-  const resourceType: ResourceType = 'AIAgent';
-  if (dryRun) {
-    return { action: 'dry-run', resourceType, realm, id: agentId };
+): Promise<ActionRecord[]> {
+  const agentId = 'northwind-chatbot-agent';
+  const desiredAgent = loadAlphaAIAgents().find((agent) => agent._id === agentId);
+  const identityAttributes = desiredAgent?.aiAgentIdentityAttributes;
+  if (!desiredAgent || !identityAttributes) {
+    return [
+      {
+        action: 'skipped',
+        operation: 'replace',
+        resourceType: 'AIAgent',
+        realm,
+        id: agentId,
+        error: 'desired AI Agent identity attributes are missing',
+      },
+    ];
   }
-  const safeDesired = desired as Record<string, unknown>;
-  // Frodo's createAIAgent identity path expects the identity object under
-  // _aiAgentIdentity (the read path exposes it there), not the flattened
-  // aiAgentIdentityAttributes input shape.
-  const identity = desired.aiAgentIdentityAttributes;
-  const identityData = identity
-    ? {
-        _id: randomUUID(),
-        oauth2ClientId: agentId,
-        name: identity.name,
-        description: identity.description,
-        ...(identity.customAttributes ? { customAttributes: identity.customAttributes } : {}),
-        _privileges: [],
-      }
-    : undefined;
-  const createDesired = identityData
-    ? { ...safeDesired, _aiAgentIdentity: identityData }
-    : safeDesired;
+  if (dryRun) {
+    return [
+      {
+        action: 'planned',
+        operation: 'replace',
+        resourceType: 'OAuth2Client',
+        realm,
+        id: agentId,
+      },
+      plannedAgentAction(realm),
+    ];
+  }
+
+  const actions: ActionRecord[] = [];
   try {
-    let live: Record<string, unknown>;
+    let client: Record<string, unknown>;
     try {
-      live = (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<
-        string,
-        unknown
-      >;
-    } catch (readError) {
-      if (!hasHttpStatus(readError, 404)) {
-        throw readError;
+      client = flattenWrapped(
+        (await instance.oauth2oidc.client.readOAuth2Client(agentId)) as unknown as Record<
+          string,
+          unknown
+        >,
+      ) as Record<string, unknown>;
+    } catch (error) {
+      if (hasHttpStatus(error, 404)) {
+        throw new Error(
+          `OAuth2 client '${agentId}' is already absent; refusing to create an AI Agent without a verified source client. ` +
+            `Restore the client or inspect the tenant and rerun with the migration flag.`,
+        );
       }
-      // Create only after a confirmed not-found response. Permission,
-      // transport, schema, and other read failures must never fall through to
-      // a tenant mutation.
-      await instance.agent.createAIAgent(
-        agentId,
-        createDesired as Parameters<typeof instance.agent.createAIAgent>[1],
-        true,
-      );
-      console.log(`[${realm}] AIAgent created with identity: ${agentId}`);
-      return { action: 'created', resourceType, realm, id: agentId };
+      throw error;
     }
-    const flat = flattenWrapped(live) as Record<string, unknown>;
-    const merged = stripAgentIdentityReadbackFields(deepMerge(flat, safeDesired));
-    await instance.agent.updateAIAgent(
+    if (client['_id'] !== agentId) {
+      throw new Error(`preflight OAuth2 client ID mismatch: expected '${agentId}'`);
+    }
+
+    try {
+      await instance.agent.readAIAgent(agentId, true);
+      throw new Error(
+        `AI Agent '${agentId}' already exists; refusing to delete the OAuth2 client. ` +
+          `Inspect the existing agent and remove the migration flag.`,
+      );
+    } catch (error) {
+      if (!hasHttpStatus(error, 404)) throw error;
+    }
+
+    await instance.oauth2oidc.client.deleteOAuth2Client(agentId);
+    actions.push({
+      action: 'deleted',
+      operation: 'delete',
+      resourceType: 'OAuth2Client',
+      realm,
+      id: agentId,
+    });
+
+    try {
+      await instance.oauth2oidc.client.readOAuth2Client(agentId);
+      throw new Error(`OAuth2 client '${agentId}' still exists after deletion`);
+    } catch (error) {
+      if (!hasHttpStatus(error, 404)) throw error;
+    }
+    actions.push({
+      action: 'verified',
+      operation: 'verify-404',
+      resourceType: 'OAuth2Client',
+      realm,
+      id: agentId,
+    });
+
+    // Do not generate an identity ID here. The tenant/Frodo create operation is
+    // authoritative; a returned identity _id is required for safe read-back.
+    const liveCoreConfig = (client['coreOAuth2ClientConfig'] ?? {}) as Record<string, unknown>;
+    const safeCoreConfig = Object.fromEntries(
+      Object.entries(liveCoreConfig).filter(([key]) => key !== 'userpassword'),
+    );
+    const createPayload = {
+      _id: agentId,
+      coreOAuth2ClientConfig: stripSensitivePayload(safeCoreConfig),
+      advancedOAuth2ClientConfig: stripSensitivePayload(client['advancedOAuth2ClientConfig']),
+      _aiAgentIdentity: {
+        oauth2ClientId: agentId,
+        name: identityAttributes.name,
+        description: identityAttributes.description,
+        ...(identityAttributes.customAttributes
+          ? { customAttributes: identityAttributes.customAttributes }
+          : {}),
+        _privileges: [],
+      },
+    };
+    const created = await instance.agent.createAIAgent(
       agentId,
-      merged as Parameters<typeof instance.agent.updateAIAgent>[1],
+      createPayload as Parameters<typeof instance.agent.createAIAgent>[1],
       true,
     );
-    console.log(`[${realm}] AIAgent updated with identity: ${agentId}`);
-    return { action: 'updated', resourceType, realm, id: agentId };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const detail = formatFrodoError(e);
-    console.error(`[${realm}] AIAgent skipped (${agentId}): ${msg}; details=${detail}`);
-    return { action: 'skipped', resourceType, realm, id: agentId, error: msg };
+    const identityId = extractCreatedIdentityId(created);
+    if (!identityId) {
+      throw new Error(
+        `Frodo createAIAgent returned no identity _id for '${agentId}'. ` +
+          `Installed Frodo 4.1.7 returns the base PUT result; refusing to claim identity creation or generate a fallback ID.`,
+      );
+    }
+    actions.push({
+      action: 'created',
+      operation: 'create',
+      resourceType: 'AIAgent',
+      realm,
+      id: agentId,
+      identityId,
+    });
+
+    const readBack = flattenWrapped(
+      (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>,
+    ) as Record<string, unknown>;
+    if (readBack['_id'] !== agentId) {
+      throw new Error(`AI Agent read-back ID mismatch for '${agentId}'`);
+    }
+    const linkedIdentityId = readBackIdentityId(readBack);
+    if (!linkedIdentityId || linkedIdentityId !== identityId) {
+      throw new Error(
+        `AI Agent '${agentId}' read-back identity mismatch: expected '${identityId}', got '${linkedIdentityId ?? 'missing'}'`,
+      );
+    }
+    actions.push({
+      action: 'verified',
+      operation: 'verify-identity',
+      resourceType: 'AIAgent',
+      realm,
+      id: agentId,
+      identityId,
+    });
+    console.log(
+      `[${realm}] Northwind OAuth2 client replaced by AIAgent: ${agentId} (identity ${identityId})`,
+    );
+  } catch (error) {
+    const msg = formatFrodoError(error);
+    actions.push({
+      action: 'skipped',
+      operation: 'replace',
+      resourceType: 'AIAgent',
+      realm,
+      id: agentId,
+      error: msg,
+    });
+    console.error(`[${realm}] Northwind chatbot migration stopped: ${msg}`);
   }
+  return actions;
 }
 
 async function upsertApplication(
@@ -559,6 +704,7 @@ export async function provision(
   config: TenantConfig,
   dryRun: boolean,
   pruneStaleApplications = false,
+  replaceNorthwindChatbotClientOptIn = false,
 ): Promise<RunSummary> {
   const { tenantUrl } = config;
 
@@ -584,7 +730,6 @@ export async function provision(
 
   // Load inputs
   const alphaClients = loadAlphaOAuth2Clients();
-  const alphaAgents = loadAlphaAIAgents();
   const alphaApplications = loadAlphaApplications();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
   const bravoClients = loadBravoOAuth2Clients();
@@ -629,18 +774,19 @@ export async function provision(
 
   const actions: ActionRecord[] = [];
 
-  // Alpha OAuth2Clients
+  // Alpha OAuth2Clients. The Northwind client is intentionally absent from
+  // desired state and can only be replaced through the explicit migration.
   for (const client of alphaClients) {
     const id = client._id;
     if (!id) continue;
     actions.push(await upsertOAuth2Client(id, client, alphaInstance, '/alpha', dryRun));
   }
 
-  // Alpha AIAgents
-  for (const agent of alphaAgents) {
-    const id = agent._id;
-    if (!id) continue;
-    actions.push(await upsertAIAgent(id, agent, alphaInstance, '/alpha', dryRun));
+  // AI Agent migration is destructive and therefore opt-in. Dry runs always
+  // display the deterministic replacement plan, while live runs without the
+  // flag leave tenant resources untouched for this migration.
+  if (dryRun || replaceNorthwindChatbotClientOptIn) {
+    actions.push(...(await replaceNorthwindChatbotClient(alphaInstance, '/alpha', dryRun)));
   }
 
   // Alpha Applications
@@ -714,8 +860,9 @@ export async function provision(
 export const main = async (): Promise<void> => {
   const dryRun = process.argv.includes('--dry-run');
   const pruneStaleApplications = process.argv.includes('--prune-stale-applications');
+  const replaceNorthwindChatbotClient = process.argv.includes('--replace-northwind-chatbot-client');
   const config = loadConfig();
-  await provision(config, dryRun, pruneStaleApplications);
+  await provision(config, dryRun, pruneStaleApplications, replaceNorthwindChatbotClient);
 };
 
 main().catch((err: unknown) => {

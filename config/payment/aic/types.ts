@@ -90,7 +90,9 @@ export interface BravoUser {
   merchantId: string;
 }
 
-export type ActionType = 'created' | 'updated' | 'deleted' | 'skipped' | 'dry-run';
+export type ActionType =
+  'created' | 'updated' | 'deleted' | 'verified' | 'skipped' | 'planned' | 'dry-run';
+export type ActionOperation = 'create' | 'delete' | 'verify-404' | 'verify-identity' | 'replace';
 export type ResourceType =
   | 'OAuth2Client'
   | 'OAuth2TrustedJwtIssuer'
@@ -104,6 +106,9 @@ export interface ActionRecord {
   resourceType: ResourceType;
   realm: string;
   id: string;
+  operation?: ActionOperation;
+  /** Managed alpha_aiagent identity ID; never a secret or credential. */
+  identityId?: string;
   error?: string;
 }
 
