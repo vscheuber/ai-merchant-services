@@ -553,12 +553,20 @@ function validateMerchantGroupDesiredState(
   if (!config.groupPrefix || !/^[a-z][a-z0-9-]*$/.test(config.groupPrefix)) {
     throw new Error('Merchant group prefix must be a stable lowercase identifier.');
   }
+  for (const attribute of [config.merchantIdAttribute, config.merchantCustomerIdAttribute]) {
+    if (!attribute || !/^custom_[A-Za-z][A-Za-z0-9_]*$/.test(attribute)) {
+      throw new Error('Merchant identity attributes must use the custom_ prefix.');
+    }
+  }
+  if (config.merchantIdAttribute === config.merchantCustomerIdAttribute) {
+    throw new Error('Merchant identity attributes must be distinct.');
+  }
   const expected = new Map(
     config.merchants.map((merchant) => [
       merchant.merchantId,
       {
         name: `${config.groupPrefix}-${merchant.merchantId}`,
-        condition: `custom_merchantId == "${merchant.merchantId}"`,
+        condition: `${config.merchantIdAttribute} == "${merchant.merchantId}"`,
       },
     ]),
   );
@@ -591,6 +599,7 @@ async function upsertMerchantGroup(
   realm: string,
   dryRun: boolean,
   schemaApproved: boolean,
+  merchantGroupConfigForRuntime: MerchantGroupConfig,
 ): Promise<ActionRecord> {
   const resourceType: ResourceType = 'MerchantGroup';
   const detail = `name=${desired.name}; condition=${desired.condition}`;
@@ -598,8 +607,7 @@ async function upsertMerchantGroup(
     return { action: 'dry-run', resourceType, realm, id: groupId, detail };
   }
   if (!schemaApproved) {
-    const error =
-      'refusing merchant-group write: set AIC_MERCHANT_SCHEMA_APPROVED=true only after custom_merchantId schema approval';
+    const error = `refusing merchant-group write: set AIC_MERCHANT_SCHEMA_APPROVED=true only after ${desired.name} identity schema approval`;
     console.error(`[${realm}] MerchantGroup skipped (${groupId}): ${error}`);
     return { action: 'skipped', resourceType, realm, id: groupId, detail, error };
   }
@@ -610,11 +618,11 @@ async function upsertMerchantGroup(
     const userSchema = await instance.idm.managed.readManagedObjectSchema('alpha_user', true);
     if (
       !userSchema.properties ||
-      !('custom_merchantId' in userSchema.properties) ||
-      !('custom_merchantCustomerId' in userSchema.properties)
+      !(merchantGroupConfigForRuntime.merchantIdAttribute in userSchema.properties) ||
+      !(merchantGroupConfigForRuntime.merchantCustomerIdAttribute in userSchema.properties)
     ) {
       throw new Error(
-        'custom_merchantId and custom_merchantCustomerId are required in alpha_user schema; group provisioning remains blocked',
+        `${merchantGroupConfigForRuntime.merchantIdAttribute} and ${merchantGroupConfigForRuntime.merchantCustomerIdAttribute} are required in alpha_user schema; group provisioning remains blocked`,
       );
     }
 
@@ -951,7 +959,15 @@ export async function provision(
       for (const group of alphaMerchantGroups) {
         const id = group._id ?? group.name;
         actions.push(
-          await upsertMerchantGroup(id, group, alphaInstance, '/alpha', dryRun, schemaApproved),
+          await upsertMerchantGroup(
+            id,
+            group,
+            alphaInstance,
+            '/alpha',
+            dryRun,
+            schemaApproved,
+            merchantGroupConfig,
+          ),
         );
       }
     }

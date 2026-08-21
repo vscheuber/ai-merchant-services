@@ -235,10 +235,33 @@ function getPaymentMerchantId(): string {
   return merchantId;
 }
 
-function assertMerchantSchemaWriteGate(): void {
+function getPaymentIdentityAttributes(): {
+  merchantIdAttribute: string;
+  merchantCustomerIdAttribute: string;
+} {
+  const merchantIdAttribute = process.env['PAYMENT_MERCHANT_ID_ATTRIBUTE'] ?? 'custom_merchantId';
+  const merchantCustomerIdAttribute =
+    process.env['PAYMENT_MERCHANT_CUSTOMER_ID_ATTRIBUTE'] ?? 'custom_merchantCustomerId';
+  for (const attribute of [merchantIdAttribute, merchantCustomerIdAttribute]) {
+    if (!/^custom_[A-Za-z][A-Za-z0-9_]*$/.test(attribute)) {
+      throw new Error(
+        `Payment merchant identity attribute '${attribute}' must use the custom_ prefix.`,
+      );
+    }
+  }
+  if (merchantIdAttribute === merchantCustomerIdAttribute) {
+    throw new Error('Payment merchant identity attributes must be distinct.');
+  }
+  return { merchantIdAttribute, merchantCustomerIdAttribute };
+}
+
+function assertMerchantSchemaWriteGate(attributes: {
+  merchantIdAttribute: string;
+  merchantCustomerIdAttribute: string;
+}): void {
   if (process.env['AIC_MERCHANT_SCHEMA_APPROVED'] !== 'true') {
     throw new Error(
-      'Payment merchant identity provisioning is blocked until custom_merchantId and custom_merchantCustomerId schema approval is enabled.',
+      `Payment merchant identity provisioning is blocked until ${attributes.merchantIdAttribute} and ${attributes.merchantCustomerIdAttribute} schema approval is enabled.`,
     );
   }
 }
@@ -255,15 +278,16 @@ function escapeQueryValue(value: string): string {
 async function findPaymentUser(
   merchantId: string,
   merchantCustomerId: string,
+  attributes: { merchantIdAttribute: string; merchantCustomerIdAttribute: string },
   serviceToken: string,
   trace?: TokenTraceStage[],
 ): Promise<PaymentUserRecord | undefined> {
   const idmBaseUrl = process.env['AIC_IDM_BASE_URL'];
   if (!idmBaseUrl) throw new Error('AIC_IDM_BASE_URL environment variable is not set');
   const filter =
-    `custom_merchantId eq "${escapeQueryValue(merchantId)}" and ` +
-    `custom_merchantCustomerId eq "${escapeQueryValue(merchantCustomerId)}"`;
-  const endpoint = `${idmBaseUrl}/managed/alpha_user?_queryFilter=${encodeURIComponent(filter)}&_fields=_id,userName,custom_merchantId,custom_merchantCustomerId`;
+    `${attributes.merchantIdAttribute} eq "${escapeQueryValue(merchantId)}" and ` +
+    `${attributes.merchantCustomerIdAttribute} eq "${escapeQueryValue(merchantCustomerId)}"`;
+  const endpoint = `${idmBaseUrl}/managed/alpha_user?_queryFilter=${encodeURIComponent(filter)}&_fields=_id,userName,${attributes.merchantIdAttribute},${attributes.merchantCustomerIdAttribute}`;
   const response = await fetch(endpoint, {
     headers: { Authorization: `Bearer ${serviceToken}` },
   });
@@ -296,6 +320,7 @@ async function findPaymentUser(
 async function createPaymentUser(
   merchantId: string,
   merchantCustomerId: string,
+  attributes: { merchantIdAttribute: string; merchantCustomerIdAttribute: string },
   givenName: string,
   sn: string,
   email: string,
@@ -311,8 +336,8 @@ async function createPaymentUser(
     sn,
     mail: email,
     accountStatus: 'active',
-    custom_merchantId: merchantId,
-    custom_merchantCustomerId: merchantCustomerId,
+    [attributes.merchantIdAttribute]: merchantId,
+    [attributes.merchantCustomerIdAttribute]: merchantCustomerId,
   };
   const endpoint = `${idmBaseUrl}/managed/alpha_user?_action=create`;
   const response = await fetch(endpoint, {
@@ -486,6 +511,7 @@ export async function getPaymentTokenDiagnostics(
     throw new Error('Merchant JWT is missing the sub claim.');
   }
   const merchantId = getPaymentMerchantId();
+  const identityAttributes = getPaymentIdentityAttributes();
 
   // Extract user claims for JIT provisioning, falling back to session user data.
   // Access tokens issued by the merchant provider may contain only protocol
@@ -522,7 +548,7 @@ export async function getPaymentTokenDiagnostics(
   // The custom properties are currently absent from the live schema. Keep the
   // explicit gate in place so this implementation cannot attempt a record write
   // until the approved schema contract is enabled in the runtime environment.
-  assertMerchantSchemaWriteGate();
+  assertMerchantSchemaWriteGate(identityAttributes);
 
   // 2. Obtain a service-account payment token for IDM operations.
   let serviceToken: string;
@@ -546,6 +572,7 @@ export async function getPaymentTokenDiagnostics(
     const existing = await findPaymentUser(
       merchantId,
       merchantCustomerId,
+      identityAttributes,
       serviceToken,
       traceEnabled ? trace : undefined,
     );
@@ -553,6 +580,7 @@ export async function getPaymentTokenDiagnostics(
       await createPaymentUser(
         merchantId,
         merchantCustomerId,
+        identityAttributes,
         givenName,
         sn,
         email,
@@ -564,6 +592,7 @@ export async function getPaymentTokenDiagnostics(
       const afterCreate = await findPaymentUser(
         merchantId,
         merchantCustomerId,
+        identityAttributes,
         serviceToken,
         traceEnabled ? trace : undefined,
       );

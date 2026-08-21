@@ -112,7 +112,7 @@ Live migration behavior is narrowly gated. The original destructive attempt dele
 
 ### Merchant group provisioning (schema-gated)
 
-Merchant group desired state is isolated behind `--provision-merchant-groups`. The global prefix is `mrch` in `inputs/merchant-groups.json`; the merchant registry currently contains `northwind`, so the derived group is `mrch-northwind` and its condition is `custom_merchantId == "northwind"`.
+Merchant group desired state is isolated behind `--provision-merchant-groups`. The global settings in `inputs/merchant-groups.json` are prefix `mrch`, merchant ID attribute `custom_merchantId`, and merchant customer identity attribute `custom_merchantCustomerId`; the merchant registry currently contains `northwind`, so the derived group is `mrch-northwind` and its condition is `custom_merchantId == "northwind"`.
 
 Dry-run is always safe and prints the intended group without reading or writing the tenant:
 

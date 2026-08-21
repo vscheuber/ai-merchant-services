@@ -1,5 +1,7 @@
 {
   "groupPrefix": "mrch",
+  "merchantIdAttribute": "custom_merchantId",
+  "merchantCustomerIdAttribute": "custom_merchantCustomerId",
   "merchants": [
     {
       "merchantId": "northwind",

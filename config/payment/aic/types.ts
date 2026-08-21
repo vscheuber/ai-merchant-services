@@ -71,9 +71,13 @@ export interface TrustedJwtIssuerPayload {
   [key: string]: unknown;
 }
 
-/** Stable, tenant-wide prefix used for payment-provider merchant groups. */
+/** Stable, tenant-wide settings for payment-provider merchant scoping. */
 export interface MerchantGroupPrefixConfig {
   groupPrefix: string;
+  /** Payment-provider user attribute containing the canonical merchant ID. */
+  merchantIdAttribute: string;
+  /** Payment-provider user attribute containing the originating customer subject. */
+  merchantCustomerIdAttribute: string;
 }
 
 /** Merchant identities that are allowed to own payment-provider groups. */
@@ -104,10 +108,10 @@ export interface PaymentUserPayload {
   sn: string;
   mail: string;
   accountStatus: string;
-  custom_merchantId: string;
-  custom_merchantCustomerId: string;
   /** `_id` is intentionally omitted so IDM generates a UUID. */
   _id?: never;
+  /** Configured merchant identity attributes are added by their global names. */
+  [attribute: string]: unknown;
 }
 
 /**
