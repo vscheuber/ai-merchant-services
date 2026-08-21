@@ -125,7 +125,7 @@ Ping AIC provides a first-class identity type called an **AI Agent** (`agent.AIA
 
 **This concept exists only in the payment provider IDP.** The merchant IDP has no equivalent.
 
-The current migration provisions `northwind-chatbot-agent` as the OAuth2 client used by the Northwind Shopping Assistant runtime. The existing `chatbot-agent` OAuth2 client remains provisioned and is not deleted or disabled. A first-class AI Agent registration is a separate follow-up task under `config/aic/inputs/alpha/ai-agents.json`.
+The current migration provisions `northwind-chatbot-agent` as the OAuth2 client used by the Northwind Shopping Assistant runtime. The existing `chatbot-agent` OAuth2 client remains provisioned and is not deleted or disabled. A first-class AI Agent registration is a separate follow-up task under `config/payment/aic/inputs/alpha/ai-agents.json`.
 
 When calling the payment provider IDP for Step 2, the runtime uses a regular OAuth2 `token-exchange` grant — not an Authorization Code flow. The `northwind-chatbot-agent` client in the payment provider IDP is configured with the `urn:ietf:params:oauth:grant-type:token-exchange` grant type.
 

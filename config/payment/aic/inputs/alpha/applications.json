@@ -28,15 +28,5 @@
     "ssoEntities": {
       "oidcId": "payment-admin-web"
     }
-  },
-  {
-    "_id": "merchant-web",
-    "name": "merchant-web",
-    "description": "Merchant web application",
-    "templateName": "web",
-    "templateVersion": "1.0",
-    "ssoEntities": {
-      "oidcId": "merchant-web"
-    }
   }
 ]

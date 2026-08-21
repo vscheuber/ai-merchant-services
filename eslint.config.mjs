@@ -33,7 +33,7 @@ export default [
       // triple-slash reference to the `.next/` types file that ESLint rules
       // (rightly) flag on hand-written code. Not a source file — ignore.
       '**/next-env.d.ts',
-      'config/aic/outputs/**',
+      'config/payment/aic/outputs/**',
       'pnpm-lock.yaml',
     ],
   },

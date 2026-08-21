@@ -8,7 +8,7 @@ cp apps/payment-user-web/.env.example    apps/payment-user-web/.env.local
 cp apps/payment-admin-web/.env.example   apps/payment-admin-web/.env.local
 cp apps/payment-api/.env.example         apps/payment-api/.env.local
 cp apps/chatbot-agent/.env.example       apps/chatbot-agent/.env.local
-cp config/aic/.env.example               config/aic/.env
+cp config/payment/aic/.env.example               config/payment/aic/.env
 ```
 
 ---
@@ -56,31 +56,31 @@ cp config/aic/.env.example               config/aic/.env
 
 ## payment-api
 
-| Variable                     | Description                                                                                                                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PAYMENT_OIDC_ISSUER`        | Expected `iss` claim in incoming JWTs. Must match the payment provider IDP (alpha realm) issuer URL.                                                                                                                     |
-| `PAYMENT_OIDC_CLIENT_ID`     | Client ID used for token introspection metadata (passed to `jwtVerify` for `audience` validation).                                                                                                                       |
-| `PAYMENT_OIDC_CLIENT_SECRET` | Client secret (currently unused at runtime but reserved for future token introspection).                                                                                                                                 |
-| `PAYMENT_OIDC_JWKS_URI`      | Payment provider IDP (alpha realm) JWKS endpoint. Used by the JWT middleware to validate incoming Bearer tokens.                                                                                                         |
-| `AIC_TENANT_URL`             | AIC tenant base URL. Reserved for future use — not currently read at runtime by `payment-api`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` and authenticates via frodo connection profile. |
+| Variable                     | Description                                                                                                                                                                                                                      |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PAYMENT_OIDC_ISSUER`        | Expected `iss` claim in incoming JWTs. Must match the payment provider IDP (alpha realm) issuer URL.                                                                                                                             |
+| `PAYMENT_OIDC_CLIENT_ID`     | Client ID used for token introspection metadata (passed to `jwtVerify` for `audience` validation).                                                                                                                               |
+| `PAYMENT_OIDC_CLIENT_SECRET` | Client secret (currently unused at runtime but reserved for future token introspection).                                                                                                                                         |
+| `PAYMENT_OIDC_JWKS_URI`      | Payment provider IDP (alpha realm) JWKS endpoint. Used by the JWT middleware to validate incoming Bearer tokens.                                                                                                                 |
+| `AIC_TENANT_URL`             | AIC tenant base URL. Reserved for future use — not currently read at runtime by `payment-api`. The provisioner reads the tenant URL from `config/payment/aic/inputs/tenant.json` and authenticates via frodo connection profile. |
 
 ---
 
 ## chatbot-agent
 
-| Variable                      | Description                                                                                                                                                                                                                |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPENAI_API_KEY`              | OpenAI API key. Required — `POST /api/chat` returns HTTP 500 if absent.                                                                                                                                                    |
-| `OPENAI_MODEL`                | OpenAI model ID (default: `gpt-4.1-mini`).                                                                                                                                                                                 |
-| `PAYMENT_API_BASE_URL`        | Base URL for `payment-api` (default: `http://localhost:3003`). Used by `POST /api/chat` to call loyalty, wallet, and checkout endpoints.                                                                                   |
-| `CHATBOT_AGENT_CLIENT_ID`     | OAuth2 client ID for the Northwind Shopping Assistant in the payment provider IDP (alpha realm). Set this to `northwind-chatbot-agent` for the current migration. Used for Step 2 token exchange.                          |
-| `CHATBOT_AGENT_CLIENT_SECRET` | Client secret for the above.                                                                                                                                                                                               |
-| `AIC_ALPHA_TOKEN_ENDPOINT`    | Payment provider IDP (alpha realm) token endpoint. Used for the Step 2 RFC 8693 token-exchange grant.                                                                                                                      |
-| `AIC_TENANT_URL`              | AIC tenant base URL. Reserved for future use — not currently read at runtime by `chatbot-agent`. The provisioner reads the tenant URL from `config/aic/inputs/tenant.json` and authenticates via frodo connection profile. |
+| Variable                      | Description                                                                                                                                                                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`              | OpenAI API key. Required — `POST /api/chat` returns HTTP 500 if absent.                                                                                                                                                            |
+| `OPENAI_MODEL`                | OpenAI model ID (default: `gpt-4.1-mini`).                                                                                                                                                                                         |
+| `PAYMENT_API_BASE_URL`        | Base URL for `payment-api` (default: `http://localhost:3003`). Used by `POST /api/chat` to call loyalty, wallet, and checkout endpoints.                                                                                           |
+| `CHATBOT_AGENT_CLIENT_ID`     | OAuth2 client ID for the Northwind Shopping Assistant in the payment provider IDP (alpha realm). Set this to `northwind-chatbot-agent` for the current migration. Used for Step 2 token exchange.                                  |
+| `CHATBOT_AGENT_CLIENT_SECRET` | Client secret for the above.                                                                                                                                                                                                       |
+| `AIC_ALPHA_TOKEN_ENDPOINT`    | Payment provider IDP (alpha realm) token endpoint. Used for the Step 2 RFC 8693 token-exchange grant.                                                                                                                              |
+| `AIC_TENANT_URL`              | AIC tenant base URL. Reserved for future use — not currently read at runtime by `chatbot-agent`. The provisioner reads the tenant URL from `config/payment/aic/inputs/tenant.json` and authenticates via frodo connection profile. |
 
 ---
 
-## AIC provisioner (`config/aic`)
+## AIC provisioner (`config/payment/aic`)
 
 | Variable                      | Description                                                                                                                                  |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

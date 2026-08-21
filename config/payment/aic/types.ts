@@ -90,13 +90,14 @@ export interface BravoUser {
   merchantId: string;
 }
 
-export type ActionType = 'created' | 'updated' | 'skipped' | 'dry-run';
+export type ActionType = 'created' | 'updated' | 'deleted' | 'skipped' | 'dry-run';
 export type ResourceType =
   | 'OAuth2Client'
   | 'OAuth2TrustedJwtIssuer'
   | 'AIAgent'
   | 'Application'
-  | 'BravoUser';
+  | 'BravoUser'
+  | 'StaleApplication';
 
 export interface ActionRecord {
   action: ActionType;

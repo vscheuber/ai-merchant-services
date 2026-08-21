@@ -19,8 +19,8 @@ coverage/
 .env.*.local
 
 # AIC provisioning outputs — keep the folder via .gitkeep only
-config/aic/outputs/**
-!config/aic/outputs/.gitkeep
+config/payment/aic/outputs/**
+!config/payment/aic/outputs/.gitkeep
 
 # Logs — keep the folder via .gitkeep only
 logs/**

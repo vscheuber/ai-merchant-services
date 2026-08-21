@@ -142,7 +142,7 @@ Each app under `apps/` has a `.env.example` listing the vars it reads at runtime
 | `CHATBOT_AGENT_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT`                    | `chatbot-agent`                                                          | Step 2 alpha user token→Northwind Shopping Assistant token exchange (`northwind-chatbot-agent`) |
 | `NEXT_PUBLIC_CHATBOT_EMBED_URL`                                                       | `merchant-web`                                                           | Configurable overlay URL (defaults to `http://localhost:3004/embed.js`)                         |
 | `OPENAI_API_KEY` / `OPENAI_MODEL`                                                     | `chatbot-agent`                                                          | Live LLM responses in `POST /api/chat`                                                          |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY`                              | `payment-api`, `chatbot-agent`, provisioner                              | AIC provisioner (tenant URL is read from `config/aic/inputs/tenant.json`)                       |
+| `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY`                              | `payment-api`, `chatbot-agent`, provisioner                              | AIC provisioner (tenant URL is read from `config/payment/aic/inputs/tenant.json`)               |
 | `BRAVO_USER_DEFAULT_PASSWORD`                                                         | provisioner                                                              | Initial password for demo merchant IDP users                                                    |
 
 See [docs/environment.md](./docs/environment.md) for complete per-variable descriptions.
@@ -154,7 +154,7 @@ See [docs/environment.md](./docs/environment.md) for complete per-variable descr
 - **`apps/`** — the five Next.js 15 apps (App Router). Each has its own `package.json`, `tsconfig.json`, `.env.example`, and `src/app/` tree.
 - **`packages/`** — `shared` (types + data helpers) and `ui` (component library).
 - **`data/`** — JSON seed data: merchants, products, users, wallet cards, transactions, loyalty balances.
-- **`config/aic/`** — declarative desired-state for the AIC provisioner. `inputs/tenant.json` holds the tenant URL and service-account env var names. `inputs/alpha/` and `inputs/bravo/` hold per-realm resources (OAuth2 clients, AI agents, trusted JWT issuers, social IDPs, journeys). `provision.ts` is the entry point.
+- **`config/payment/aic/`** — declarative desired-state for the AIC provisioner. `inputs/tenant.json` holds the tenant URL and service-account env var names. `config/payment/aic/inputs/alpha/` holds payment-provider resources; `config/merchant/aic/inputs/` holds merchant resources (OAuth2 clients, applications, social IDPs, journeys). `provision.ts` is the entry point.
 - **`docs/`** — reference documentation: [architecture.md](./docs/architecture.md), [identity.md](./docs/identity.md), [scripts.md](./docs/scripts.md), [environment.md](./docs/environment.md), [getting-started.md](./docs/getting-started.md).
 - **`scripts/`** — `dev-start.sh`, `dev-stop.sh`, `dev-status.sh`.
 - **`logs/`** — per-service log files (gitignored; populated when services start).

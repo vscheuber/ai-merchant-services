@@ -257,7 +257,7 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  config/aic:
+  config/payment/aic:
     dependencies:
       '@rockcarver/frodo-lib':
         specifier: ^4.1.7

@@ -48,11 +48,15 @@ function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
 }
 
 function loadBravoOAuth2Clients(): OAuth2ClientPayload[] {
-  return loadJson<OAuth2ClientPayload[]>('inputs/bravo/oauth2-clients.json');
+  return loadJson<OAuth2ClientPayload[]>('../../merchant/aic/inputs/oauth2-clients.json');
+}
+
+function loadBravoApplications(): ApplicationPayload[] {
+  return loadJson<ApplicationPayload[]>('../../merchant/aic/inputs/applications.json');
 }
 
 function loadBravoUsers(): BravoUser[] {
-  return loadJson<BravoUser[]>('../../data/users.json');
+  return loadJson<BravoUser[]>('../../../data/users.json');
 }
 
 // ---------------------------------------------------------------------------
@@ -101,10 +105,7 @@ function deepMerge(
       tv !== null &&
       !Array.isArray(tv)
     ) {
-      result[key] = deepMerge(
-        tv as Record<string, unknown>,
-        sv as Record<string, unknown>,
-      );
+      result[key] = deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
     } else {
       result[key] = sv;
     }
@@ -125,7 +126,7 @@ type FrodoInstance = ReturnType<typeof frodo.createInstanceWithServiceAccount>;
 /**
  * If OAUTH2_SECRET_<CLIENT_ID_UPPERCASED> is set, inject it as the client
  * secret (coreOAuth2ClientConfig.userpassword). This lets operators set known
- * secrets via config/aic/.env without committing credentials in JSON files.
+ * secrets via config/payment/aic/.env without committing credentials in JSON files.
  */
 function injectClientSecret(clientId: string, payload: OAuth2ClientPayload): OAuth2ClientPayload {
   const envKey = `OAUTH2_SECRET_${clientId.toUpperCase().replace(/-/g, '_')}`;
@@ -155,9 +156,10 @@ async function upsertOAuth2Client(
   try {
     let live: Record<string, unknown>;
     try {
-      live = (await instance.oauth2oidc.client.readOAuth2Client(
-        clientId,
-      )) as unknown as Record<string, unknown>;
+      live = (await instance.oauth2oidc.client.readOAuth2Client(clientId)) as unknown as Record<
+        string,
+        unknown
+      >;
     } catch {
       await instance.oauth2oidc.client.createOAuth2Client(
         clientId,
@@ -201,7 +203,9 @@ async function upsertTrustedJwtIssuer(
     } catch {
       await instance.oauth2oidc.issuer.createOAuth2TrustedJwtIssuer(
         issuerId,
-        desired as unknown as Parameters<typeof instance.oauth2oidc.issuer.createOAuth2TrustedJwtIssuer>[1],
+        desired as unknown as Parameters<
+          typeof instance.oauth2oidc.issuer.createOAuth2TrustedJwtIssuer
+        >[1],
       );
       console.log(`[${realm}] OAuth2TrustedJwtIssuer created: ${issuerId}`);
       return { action: 'created', resourceType, realm, id: issuerId };
@@ -210,7 +214,9 @@ async function upsertTrustedJwtIssuer(
     const merged = deepMerge(flat, desired as Record<string, unknown>);
     await instance.oauth2oidc.issuer.updateOAuth2TrustedJwtIssuer(
       issuerId,
-      merged as unknown as Parameters<typeof instance.oauth2oidc.issuer.updateOAuth2TrustedJwtIssuer>[1],
+      merged as unknown as Parameters<
+        typeof instance.oauth2oidc.issuer.updateOAuth2TrustedJwtIssuer
+      >[1],
     );
     console.log(`[${realm}] OAuth2TrustedJwtIssuer updated: ${issuerId}`);
     return { action: 'updated', resourceType, realm, id: issuerId };
@@ -295,9 +301,7 @@ function hasHttpStatus(error: unknown, status: number): boolean {
   return visit(error);
 }
 
-function stripAgentIdentityReadbackFields(
-  obj: Record<string, unknown>,
-): Record<string, unknown> {
+function stripAgentIdentityReadbackFields(obj: Record<string, unknown>): Record<string, unknown> {
   const result = { ...obj };
   // These fields are read-only relationship metadata. Keep the desired
   // aiAgentIdentityAttributes so Frodo can reconcile the first-class identity.
@@ -328,9 +332,7 @@ async function upsertAIAgent(
         oauth2ClientId: agentId,
         name: identity.name,
         description: identity.description,
-        ...(identity.customAttributes
-          ? { customAttributes: identity.customAttributes }
-          : {}),
+        ...(identity.customAttributes ? { customAttributes: identity.customAttributes } : {}),
         _privileges: [],
       }
     : undefined;
@@ -340,7 +342,10 @@ async function upsertAIAgent(
   try {
     let live: Record<string, unknown>;
     try {
-      live = (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>;
+      live = (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<
+        string,
+        unknown
+      >;
     } catch (readError) {
       if (!hasHttpStatus(readError, 404)) {
         throw readError;
@@ -357,9 +362,7 @@ async function upsertAIAgent(
       return { action: 'created', resourceType, realm, id: agentId };
     }
     const flat = flattenWrapped(live) as Record<string, unknown>;
-    const merged = stripAgentIdentityReadbackFields(
-      deepMerge(flat, safeDesired),
-    );
+    const merged = stripAgentIdentityReadbackFields(deepMerge(flat, safeDesired));
     await instance.agent.updateAIAgent(
       agentId,
       merged as Parameters<typeof instance.agent.updateAIAgent>[1],
@@ -389,9 +392,10 @@ async function upsertApplication(
   try {
     let live: Record<string, unknown>;
     try {
-      live = (await instance.app.readApplicationByName(
-        desired.name,
-      )) as unknown as Record<string, unknown>;
+      live = (await instance.app.readApplicationByName(desired.name)) as unknown as Record<
+        string,
+        unknown
+      >;
     } catch {
       await instance.app.createApplication(
         applicationId,
@@ -456,11 +460,10 @@ async function upsertBravoUser(
     // Exists — update profile fields only; skip password to prevent accidental
     // credential resets after initial provisioning. IDM PUT requires _id in body.
     const existingUuid = existing[0]!._id as string;
-    await instance.idm.managed.updateManagedObject(
-      'bravo_user',
-      existingUuid,
-      { ...moBase, _id: existingUuid } as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
-    );
+    await instance.idm.managed.updateManagedObject('bravo_user', existingUuid, {
+      ...moBase,
+      _id: existingUuid,
+    } as Parameters<typeof instance.idm.managed.updateManagedObject>[2]);
     console.log(`[${realm}] BravoUser updated: ${userId} (${user.userName})`);
     return { action: 'updated', resourceType, realm, id: userId };
   } catch (e) {
@@ -471,12 +474,80 @@ async function upsertBravoUser(
 }
 
 // ---------------------------------------------------------------------------
+// Explicit stale-application cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove only the known legacy merchant-web application from the payment
+ * provider realm. This is deliberately opt-in and always uses a non-deep
+ * delete so dependencies cannot be removed as a side effect.
+ */
+async function pruneStaleAlphaApplications(
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord[]> {
+  // Dry runs do not call tenant APIs. Report the fixed, narrow cleanup target.
+  if (dryRun) {
+    return [
+      {
+        action: 'dry-run',
+        resourceType: 'StaleApplication',
+        realm,
+        id: 'merchant-web',
+      },
+    ];
+  }
+  const applications = await instance.app.readApplications();
+  const staleApplications = applications.filter(
+    (application) =>
+      application._id === 'merchant-web' &&
+      application.name === 'merchant-web' &&
+      (application.ssoEntities as unknown as Record<string, unknown>)['oidcId'] === 'merchant-web',
+  );
+  const actions: ActionRecord[] = [];
+  for (const application of staleApplications) {
+    const id = application._id;
+    if (!id) continue;
+    try {
+      await instance.app.deleteApplication(id, false);
+      // Verify the non-deep delete did not leave the targeted application.
+      try {
+        await instance.app.readApplication(id);
+        throw new Error(`application '${id}' still exists after non-deep delete`);
+      } catch (readError) {
+        if (!hasHttpStatus(readError, 404)) throw readError;
+      }
+      actions.push({ action: 'deleted', resourceType: 'StaleApplication', realm, id });
+      console.log(`[${realm}] stale Application deleted (non-deep): ${id}`);
+    } catch (error) {
+      if (hasHttpStatus(error, 404)) {
+        actions.push({
+          action: 'skipped',
+          resourceType: 'StaleApplication',
+          realm,
+          id,
+          error: 'already absent (404)',
+        });
+        console.log(`[${realm}] stale Application already absent: ${id}`);
+        continue;
+      }
+      const msg = formatFrodoError(error);
+      actions.push({ action: 'skipped', resourceType: 'StaleApplication', realm, id, error: msg });
+      console.error(`[${realm}] stale Application skipped (${id}): ${msg}`);
+    }
+  }
+  return actions;
+}
+
+// ---------------------------------------------------------------------------
 // Main provision function
 // ---------------------------------------------------------------------------
 
 export async function provision(
   config: TenantConfig,
   dryRun: boolean,
+  pruneStaleApplications = false,
 ): Promise<RunSummary> {
   const { tenantUrl } = config;
 
@@ -498,8 +569,7 @@ export async function provision(
     );
   }
   // Normalise: frodo-lib decryption may return a JSON string or a parsed object.
-  const svcAccountJwk: string =
-    typeof rawJwk === 'string' ? rawJwk : JSON.stringify(rawJwk);
+  const svcAccountJwk: string = typeof rawJwk === 'string' ? rawJwk : JSON.stringify(rawJwk);
 
   // Load inputs
   const alphaClients = loadAlphaOAuth2Clients();
@@ -507,6 +577,7 @@ export async function provision(
   const alphaApplications = loadAlphaApplications();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
   const bravoClients = loadBravoOAuth2Clients();
+  const bravoApplications = loadBravoApplications();
   const bravoUsers = loadBravoUsers();
 
   // Create frodo instances
@@ -538,8 +609,8 @@ export async function provision(
     if (!pw) {
       console.warn(
         '[provision] WARNING: BRAVO_USER_DEFAULT_PASSWORD is not set. ' +
-        'Using built-in fallback password for bravo user creation. ' +
-        'Set this env var (see config/aic/.env.example) to avoid credentials in source.',
+          'Using built-in fallback password for bravo user creation. ' +
+          'Set this env var (see config/payment/aic/.env.example) to avoid credentials in source.',
       );
     }
     return pw ?? 'Br@vo1234!';
@@ -551,52 +622,51 @@ export async function provision(
   for (const client of alphaClients) {
     const id = client._id;
     if (!id) continue;
-    actions.push(
-      await upsertOAuth2Client(id, client, alphaInstance, '/alpha', dryRun),
-    );
+    actions.push(await upsertOAuth2Client(id, client, alphaInstance, '/alpha', dryRun));
   }
 
   // Alpha AIAgents
   for (const agent of alphaAgents) {
     const id = agent._id;
     if (!id) continue;
-    actions.push(
-      await upsertAIAgent(id, agent, alphaInstance, '/alpha', dryRun),
-    );
+    actions.push(await upsertAIAgent(id, agent, alphaInstance, '/alpha', dryRun));
   }
 
   // Alpha Applications
   for (const application of alphaApplications) {
     const id = application._id;
     if (!id) continue;
-    actions.push(
-      await upsertApplication(id, application, alphaInstance, '/alpha', dryRun),
-    );
+    actions.push(await upsertApplication(id, application, alphaInstance, '/alpha', dryRun));
   }
 
   // Alpha TrustedJwtIssuers
   for (const issuer of alphaTrustedIssuers) {
     const id = issuer._id;
     if (!id) continue;
-    actions.push(
-      await upsertTrustedJwtIssuer(id, issuer, alphaInstance, '/alpha', dryRun),
-    );
+    actions.push(await upsertTrustedJwtIssuer(id, issuer, alphaInstance, '/alpha', dryRun));
   }
 
   // Bravo OAuth2Clients
   for (const client of bravoClients) {
     const id = client._id;
     if (!id) continue;
-    actions.push(
-      await upsertOAuth2Client(id, client, bravoInstance, '/bravo', dryRun),
-    );
+    actions.push(await upsertOAuth2Client(id, client, bravoInstance, '/bravo', dryRun));
+  }
+
+  // Bravo Applications
+  for (const application of bravoApplications) {
+    const id = application._id;
+    if (!id) continue;
+    actions.push(await upsertApplication(id, application, bravoInstance, '/bravo', dryRun));
+  }
+
+  if (pruneStaleApplications) {
+    actions.push(...(await pruneStaleAlphaApplications(alphaInstance, '/alpha', dryRun)));
   }
 
   // Bravo Users
   for (const user of bravoUsers) {
-    actions.push(
-      await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword),
-    );
+    actions.push(await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword));
   }
 
   const summary: RunSummary = {
@@ -610,10 +680,7 @@ export async function provision(
     console.log('\n--- Dry-run plan ---');
     console.log(
       actions
-        .map(
-          (a) =>
-            `  ${a.action.padEnd(8)} ${a.resourceType.padEnd(26)} [${a.realm}] ${a.id}`,
-        )
+        .map((a) => `  ${a.action.padEnd(8)} ${a.resourceType.padEnd(26)} [${a.realm}] ${a.id}`)
         .join('\n'),
     );
     console.log('--- End dry-run plan ---\n');
@@ -635,8 +702,9 @@ export async function provision(
 
 export const main = async (): Promise<void> => {
   const dryRun = process.argv.includes('--dry-run');
+  const pruneStaleApplications = process.argv.includes('--prune-stale-applications');
   const config = loadConfig();
-  await provision(config, dryRun);
+  await provision(config, dryRun, pruneStaleApplications);
 };
 
 main().catch((err: unknown) => {

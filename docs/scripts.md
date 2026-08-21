@@ -60,7 +60,7 @@ Service status:
 
 ### `pnpm --filter @acme/aic-config provision`
 
-Reads the desired-state configuration from `config/aic/inputs/` and idempotently creates or updates resources in a live Ping AIC tenant. Uses the `@rockcarver/frodo-lib` SDK.
+Reads payment-provider desired state from `config/payment/aic/inputs/` and merchant desired state from `config/merchant/aic/inputs/`, then idempotently creates or updates resources in a live Ping AIC tenant. Uses the `@rockcarver/frodo-lib` SDK.
 
 **Required configuration** (see [environment.md](./environment.md) for full descriptions):
 
@@ -73,31 +73,34 @@ If the frodo connection profile for the AIC tenant is missing or has no service 
 
 ### What the provisioner creates
 
-Resources are declared in `config/aic/inputs/` as JSON files. The provisioner performs an **upsert**: if a resource exists it is updated (deep-merge); if it does not exist it is created.
+Resources are declared in `config/payment/aic/inputs/` as JSON files. The provisioner performs an **upsert**: if a resource exists it is updated (deep-merge); if it does not exist it is created.
 
 **Payment provider IDP (alpha realm):**
 
-| Resource type          | IDs                                                                                          |
-| ---------------------- | -------------------------------------------------------------------------------------------- |
-| OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                       |
-| OAuth2Client           | `northwind-chatbot-agent` (new; `chatbot-agent` retained)                                    |
-| OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange |
+| Resource type          | IDs                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                                                       |
+| OAuth2Client           | `northwind-chatbot-agent` (new; `chatbot-agent` retained)                                                                    |
+| Application            | `payment-api`, `payment-user-web`, `payment-admin-web` — payment-provider applications linked to the matching OAuth2 clients |
+| OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange                                 |
 
 **Merchant IDP (bravo realm):**
 
 | Resource type                  | IDs                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------ |
 | OAuth2Client                   | `merchant-web`                                                                       |
+| Application                    | `merchant-web`                                                                       |
 | BravoUser (managed/bravo_user) | Three demo shoppers from `data/users.json` (Ada Lovelace, Grace Hopper, Alan Turing) |
 
 Demo users are created with `BRAVO_USER_DEFAULT_PASSWORD` as their initial password. On subsequent runs the profile fields are updated but the password is left unchanged to avoid accidental credential resets.
 
 ### Dry run
 
-Preview what the provisioner would do without making any API calls:
+Preview what the provisioner would do without making any API calls. The optional prune flag reports its fixed cleanup target without reading or deleting tenant data:
 
 ```bash
 pnpm --filter @acme/aic-config provision -- --dry-run
+pnpm --filter @acme/aic-config provision -- --dry-run --prune-stale-applications
 ```
 
 Output:
@@ -108,8 +111,12 @@ Output:
   dry-run  OAuth2Client               [/alpha] payment-user-web
   dry-run  OAuth2Client               [/alpha] payment-admin-web
   dry-run  OAuth2Client               [/alpha] northwind-chatbot-agent
+  dry-run  Application                [/alpha] payment-api
+  dry-run  Application                [/alpha] payment-user-web
+  dry-run  Application                [/alpha] payment-admin-web
   dry-run  OAuth2TrustedJwtIssuer     [/alpha] bravo-realm
   dry-run  OAuth2Client               [/bravo] merchant-web
+  dry-run  Application                [/bravo] merchant-web
   dry-run  BravoUser                  [/bravo] <user-id-1>
   dry-run  BravoUser                  [/bravo] <user-id-2>
   dry-run  BravoUser                  [/bravo] <user-id-3>
@@ -120,7 +127,7 @@ A frodo connection profile for the AIC tenant is required even for `--dry-run` �
 
 ### Run output
 
-When run live (without `--dry-run`), the provisioner writes a timestamped JSON summary to `config/aic/outputs/provision-run-<timestamp>.json`. The file records every action taken (`created`, `updated`, `skipped`) along with the resource type, realm, and ID.
+When run live (without `--dry-run`), the provisioner writes a timestamped JSON summary to `config/payment/aic/outputs/provision-run-<timestamp>.json`. The file records every action taken (`created`, `updated`, `skipped`) along with the resource type, realm, and ID.
 
 ### Running the provisioner
 
@@ -138,15 +145,18 @@ export BRAVO_USER_DEFAULT_PASSWORD='<initial-password>'
 # Preview plan (frodo profile is read, but no AIC API calls are made)
 pnpm --filter @acme/aic-config provision -- --dry-run
 
-# Apply
+# Apply (does not prune stale applications)
 pnpm --filter @acme/aic-config provision
+
+# Explicitly prune only alpha merchant-web, non-deep, after reviewing the dry-run
+pnpm --filter @acme/aic-config provision -- --prune-stale-applications
 ```
 
-Alternatively, copy `config/aic/.env.example` to `config/aic/.env` and fill in the values, then source it before running:
+Alternatively, copy `config/payment/aic/.env.example` to `config/payment/aic/.env` and fill in the values, then source it before running:
 
 ```bash
-cp config/aic/.env.example config/aic/.env
-# edit config/aic/.env
-source config/aic/.env
+cp config/payment/aic/.env.example config/payment/aic/.env
+# edit config/payment/aic/.env
+source config/payment/aic/.env
 pnpm --filter @acme/aic-config provision
 ```
