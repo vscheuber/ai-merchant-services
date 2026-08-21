@@ -275,7 +275,14 @@ function hasHttpStatus(error: unknown, status: number): boolean {
     if (seen.has(value)) return false;
     seen.add(value);
     const record = value as Record<string, unknown>;
-    if (record['httpStatus'] === status || record['status'] === status) return true;
+    if (
+      record['httpStatus'] === status ||
+      record['status'] === status ||
+      record['httpStatus'] === String(status) ||
+      record['status'] === String(status)
+    ) {
+      return true;
+    }
     if (
       typeof record['response'] === 'object' &&
       record['response'] !== null &&
