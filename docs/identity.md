@@ -110,12 +110,13 @@ Env vars required: `CHATBOT_AGENT_CLIENT_ID`, `CHATBOT_AGENT_CLIENT_SECRET`, `AI
 On the first Step 1 exchange for a given shopper, the shopper will not yet have a `managed/alpha_user` record in the payment provider IDM. `merchant-web` detects this and creates the record automatically before calling the token endpoint:
 
 1. Obtain a service-account token via `client_credentials` (`PAYMENT_API_CLIENT_ID` + `PAYMENT_API_CLIENT_SECRET`), using the `fr:idm:*` scope.
-2. `GET /openidm/managed/alpha_user/<sub>` — 404 means the user is absent.
-3. `PUT /openidm/managed/alpha_user/<sub>` with `{ _id, userName, givenName, sn, mail }` extracted from the bravo JWT claims.
+2. Query `managed/alpha_user` by the metadata pair `custom_merchantId == <merchant-id>` and `custom_merchantCustomerId == <merchant-IDP-subject>`; do not use the external subject as the payment-provider managed-object path or `_id`.
+3. If absent, create the payment-provider user with an IDM-generated UUID `_id`, a separate generated UUID `userName`, required profile fields, `custom_merchantId`, and `custom_merchantCustomerId`.
+4. Resolve the resulting payment-provider identity through the trusted issuer/resource-owner contract before the token exchange.
 
-A 409 response on the PUT is treated as a no-op (a concurrent request already created the user). Subsequent exchanges skip steps 1–3.
+A concurrent-create response is handled by repeating the metadata lookup and using the existing record; it must not assume that the external subject is the managed-object ID.
 
-The `<sub>` value from the bravo JWT becomes the `_id` of the `alpha_user` record, allowing the payment provider IDP's `OAuth2TrustedJwtIssuer` to map the incoming bravo `sub` claim to an existing alpha user during the exchange.
+The merchant-IDP `<sub>` is stored as `custom_merchantCustomerId` so arbitrary merchant IDPs can use non-UUID or otherwise unsuitable subject values while retaining an idempotent identity link.
 
 ---
 
