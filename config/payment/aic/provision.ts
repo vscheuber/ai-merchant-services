@@ -592,6 +592,96 @@ function validateMerchantGroupDesiredState(
   }
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+function isUnknownRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function assertStringArray(value: unknown, field: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+    throw new Error(`alpha_user schema is malformed: '${field}' must be an array of strings.`);
+  }
+}
+
+/**
+ * Validate the exact schema contract needed before writing merchant groups.
+ *
+ * The approval environment variable is only an operator intent signal. The
+ * tenant response is authoritative and must prove that both configured
+ * identity properties exist, are scalar strings, and can be written by the
+ * JIT user flow. Unknown or malformed metadata is rejected before any group
+ * read or mutation is attempted.
+ */
+function assertMerchantIdentitySchema(
+  schema: unknown,
+  config: MerchantGroupConfig,
+): asserts schema is UnknownRecord {
+  if (!isUnknownRecord(schema) || schema['type'] !== 'object') {
+    throw new Error(
+      'alpha_user schema lookup returned malformed metadata; refusing merchant-group writes.',
+    );
+  }
+
+  const properties = schema['properties'];
+  if (!isUnknownRecord(properties)) {
+    throw new Error('alpha_user schema is malformed: properties must be an object.');
+  }
+  assertStringArray(schema['order'], 'order');
+  assertStringArray(schema['required'], 'required');
+
+  for (const attribute of [config.merchantIdAttribute, config.merchantCustomerIdAttribute]) {
+    if (!Object.prototype.hasOwnProperty.call(properties, attribute)) {
+      throw new Error(
+        `${attribute} is missing from alpha_user schema; merchant-group writes remain blocked.`,
+      );
+    }
+    if (!schema['order'].includes(attribute)) {
+      throw new Error(
+        `${attribute} is missing from alpha_user schema order metadata; merchant-group writes remain blocked.`,
+      );
+    }
+
+    const property = properties[attribute];
+    if (!isUnknownRecord(property) || property['type'] !== 'string') {
+      throw new Error(
+        `${attribute} must be a scalar string in alpha_user schema; merchant-group writes remain blocked.`,
+      );
+    }
+
+    // Frodo exposes userEditable; some IDM deployments also expose writable.
+    // At least one marker must be explicitly true. If an additional marker is
+    // returned, it must not contradict it, rejecting ambiguous metadata.
+    const userEditable = property['userEditable'];
+    const writable = property['writable'];
+    if (userEditable !== undefined && userEditable !== true) {
+      throw new Error(
+        `${attribute} has userEditable metadata that is not true; merchant-group writes remain blocked.`,
+      );
+    }
+    if (writable !== undefined && writable !== true) {
+      throw new Error(
+        `${attribute} has writable metadata that is not true; merchant-group writes remain blocked.`,
+      );
+    }
+    if (userEditable !== true && writable !== true) {
+      throw new Error(
+        `${attribute} lacks explicit writable/userEditable=true metadata; merchant-group writes remain blocked.`,
+      );
+    }
+  }
+}
+
+async function readAndValidateMerchantIdentitySchema(
+  instance: FrodoInstance,
+  config: MerchantGroupConfig,
+): Promise<void> {
+  // Flatten only the documented inherited/value wrapper; validation below
+  // still rejects all other malformed 200 responses.
+  const rawSchema = await instance.idm.managed.readManagedObjectSchema('alpha_user', true);
+  assertMerchantIdentitySchema(flattenWrapped(rawSchema), config);
+}
+
 async function upsertMerchantGroup(
   groupId: string,
   desired: MerchantGroupPayload,
@@ -607,24 +697,17 @@ async function upsertMerchantGroup(
     return { action: 'dry-run', resourceType, realm, id: groupId, detail };
   }
   if (!schemaApproved) {
-    const error = `refusing merchant-group write: set AIC_MERCHANT_SCHEMA_APPROVED=true only after ${desired.name} identity schema approval`;
-    console.error(`[${realm}] MerchantGroup skipped (${groupId}): ${error}`);
-    return { action: 'skipped', resourceType, realm, id: groupId, detail, error };
+    throw new Error(
+      `[${realm}] MerchantGroup ${groupId} refused: set AIC_MERCHANT_SCHEMA_APPROVED=true only after ${desired.name} identity schema approval`,
+    );
   }
 
   try {
-    // The group condition depends on custom_merchantId. Verify the schema gate
-    // before any group read/upsert so an unsupported tenant cannot be mutated.
-    const userSchema = await instance.idm.managed.readManagedObjectSchema('alpha_user', true);
-    if (
-      !userSchema.properties ||
-      !(merchantGroupConfigForRuntime.merchantIdAttribute in userSchema.properties) ||
-      !(merchantGroupConfigForRuntime.merchantCustomerIdAttribute in userSchema.properties)
-    ) {
-      throw new Error(
-        `${merchantGroupConfigForRuntime.merchantIdAttribute} and ${merchantGroupConfigForRuntime.merchantCustomerIdAttribute} are required in alpha_user schema; group provisioning remains blocked`,
-      );
-    }
+    // The group condition depends on the identity pair. Verify the complete
+    // schema contract before any group read/upsert so an unsupported tenant
+    // cannot be mutated. The explicit env gate above is not sufficient by
+    // itself because it cannot attest to live tenant metadata.
+    await readAndValidateMerchantIdentitySchema(instance, merchantGroupConfigForRuntime);
 
     let live: Record<string, unknown>;
     try {
@@ -668,8 +751,8 @@ async function upsertMerchantGroup(
     return { action: 'updated', resourceType, realm, id: groupId, detail };
   } catch (error) {
     const msg = formatFrodoError(error);
-    console.error(`[${realm}] MerchantGroup skipped (${groupId}): ${msg}`);
-    return { action: 'skipped', resourceType, realm, id: groupId, detail, error: msg };
+    console.error(`[${realm}] MerchantGroup failed (${groupId}): ${msg}`);
+    throw new Error(`MerchantGroup upsert failed for '${groupId}': ${msg}`, { cause: error });
   }
 }
 
