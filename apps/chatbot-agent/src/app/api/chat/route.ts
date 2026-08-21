@@ -2,8 +2,8 @@
 //
 // Task 10 additions on top of the Task 8 LLM integration:
 //   1. Accepts `accessToken` (payment realm user token) in the request body.
-//   2. Step 2 token exchange: exchanges the payment token for a chatbot-agent
-//      agent token using `chatbot-agent` client credentials and the
+//   2. Step 2 token exchange: exchanges the payment token for a northwind-chatbot-agent
+//      agent token using `northwind-chatbot-agent` client credentials and the
 //      `urn:ietf:params:oauth:grant-type:token-exchange` grant.
 //   3. Fetches shopper context (loyalty balance + wallet cards) from payment-api
 //      using the agent token as Bearer.
@@ -72,9 +72,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 // ── Step 2 token exchange ────────────────────────────────────────────────────
 
 /**
- * Exchange an payment realm user token for a chatbot-agent agent token.
+ * Exchange an payment realm user token for a northwind-chatbot-agent agent token.
  *
- * Uses the `chatbot-agent` client credentials and the RFC 8693 token-exchange
+ * Uses the `northwind-chatbot-agent` client credentials and the RFC 8693 token-exchange
  * grant against the AIC payment realm token endpoint.
  *
  * Reads env vars: `AIC_ALPHA_TOKEN_ENDPOINT`, `CHATBOT_AGENT_CLIENT_ID`,
@@ -131,7 +131,7 @@ interface UserContext {
 /**
  * Fetch the shopper's loyalty balance and saved wallet cards from the payment-api.
  *
- * Uses the chatbot-agent token (from Step 2) as the Bearer credential so that
+ * Uses the northwind-chatbot-agent token (from Step 2) as the Bearer credential so that
  * the payment-api JWT middleware accepts the request.
  */
 async function fetchUserContext(agentToken: string, userId: string): Promise<UserContext> {
@@ -346,7 +346,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   //
   // When `paymentToken` is present:
   //   1. Decode the payment JWT to extract `sub` (userId).
-  //   2. Exchange the payment token for a chatbot-agent agent token (Step 2).
+  //   2. Exchange the payment token for a northwind-chatbot-agent agent token (Step 2).
   //   3. Fetch the shopper's loyalty balance + wallet cards from payment-api.
   //
   // All three steps are best-effort for the normal chat path — a failure in
@@ -370,7 +370,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       // Non-fatal: proceed without userId; context fetch will be skipped.
     }
 
-    // Step 2: exchange payment user token for chatbot-agent agent token.
+    // Step 2: exchange payment user token for northwind-chatbot-agent agent token.
     // This is best-effort for the normal chat path — a failure degrades to an
     // unauthenticated system prompt (no loyalty/wallet context) rather than an
     // error response, matching the in-code specification at lines 330-332.
@@ -388,7 +388,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           name: 'step-2-payment-to-agent',
           status: 'failed',
           message: err instanceof Error ? err.message.slice(0, 300) : 'Token exchange failed',
-        })
+        });
       }
       // Non-fatal on the normal chat path: clear agent token and continue with
       // an unauthenticated system prompt. Log the failure for operator visibility.
@@ -455,7 +455,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       ],
     };
 
-    const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(/\/$/, '');
+    const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(
+      /\/$/,
+      '',
+    );
     let checkoutResultContent: string;
 
     try {

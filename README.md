@@ -88,20 +88,20 @@ See [docs/architecture.md](./docs/architecture.md) for the full token flow and c
 
 ## Apps and ports
 
-| App | Brand | Port | Role |
-| --- | --- | ---: | --- |
-| `merchant-web` | Northwind Retail | 3000 | Demo storefront. Hosts shopper OIDC login. Embeds the Acme Assist overlay on every route. |
-| `payment-user-web` | Acme Payments | 3001 | Consumer-facing payment dashboard (transactions, profile). |
-| `payment-admin-web` | Acme Payments Admin | 3002 | Admin dashboard (funnel-per-merchant view, users, merchants). |
-| `payment-api` | Acme Payments | 3003 | JWT-protected payment REST API. Reads and writes JSON seed data. |
-| `chatbot-agent` | Acme Assist | 3004 | Hosts `/embed.js`, standalone `/preview`, and `POST /api/chat`. |
+| App                 | Brand               | Port | Role                                                                                      |
+| ------------------- | ------------------- | ---: | ----------------------------------------------------------------------------------------- |
+| `merchant-web`      | Northwind Retail    | 3000 | Demo storefront. Hosts shopper OIDC login. Embeds the Acme Assist overlay on every route. |
+| `payment-user-web`  | Acme Payments       | 3001 | Consumer-facing payment dashboard (transactions, profile).                                |
+| `payment-admin-web` | Acme Payments Admin | 3002 | Admin dashboard (funnel-per-merchant view, users, merchants).                             |
+| `payment-api`       | Acme Payments       | 3003 | JWT-protected payment REST API. Reads and writes JSON seed data.                          |
+| `chatbot-agent`     | Acme Assist         | 3004 | Hosts `/embed.js`, standalone `/preview`, and `POST /api/chat`.                           |
 
 Shared packages:
 
-| Package | Description |
-| --- | --- |
-| `@acme/ui` | Tailwind preset, shadcn/ui primitives, `ThemeProvider`, `AppShell`, `ChatShell`. |
-| `@acme/shared` | TypeScript domain types and JSON read/write helpers for seed data. |
+| Package        | Description                                                                      |
+| -------------- | -------------------------------------------------------------------------------- |
+| `@acme/ui`     | Tailwind preset, shadcn/ui primitives, `ThemeProvider`, `AppShell`, `ChatShell`. |
+| `@acme/shared` | TypeScript domain types and JSON read/write helpers for seed data.               |
 
 ---
 
@@ -131,19 +131,19 @@ See [docs/scripts.md](./docs/scripts.md) for what the provisioner creates per re
 
 Each app under `apps/` has a `.env.example` listing the vars it reads at runtime. Copy each to `.env.local` and fill in real values to enable the corresponding features.
 
-| Env var group | Apps | Feature |
-| --- | --- | --- |
-| `AUTH_SECRET` | `merchant-web`, `payment-user-web`, `payment-admin-web` | Session cookie signing/encryption (Auth.js v5) |
-| `MERCHANT_OIDC_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET` | `merchant-web` | Shopper login via the merchant IDP (bravo realm) |
-| `PAYMENT_OIDC_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET` | `payment-user-web`, `payment-admin-web`, `payment-api` | Consumer/admin login and API JWT validation (payment provider IDP, alpha realm) |
-| `PAYMENT_OIDC_JWKS_URI` | `payment-api` | JWT middleware — validates incoming Bearer tokens |
-| `PAYMENT_API_BASE_URL` | `merchant-web`, `payment-user-web`, `payment-admin-web`, `chatbot-agent` | Runtime calls to `payment-api` |
-| `PAYMENT_API_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT` + `AIC_IDM_BASE_URL` | `merchant-web` | Chatbot token proxy — Step 1 bravo→alpha exchange and JIT alpha_user provisioning |
-| `CHATBOT_AGENT_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT` | `chatbot-agent` | Step 2 alpha user token→agent token exchange |
-| `NEXT_PUBLIC_CHATBOT_EMBED_URL` | `merchant-web` | Configurable overlay URL (defaults to `http://localhost:3004/embed.js`) |
-| `OPENAI_API_KEY` / `OPENAI_MODEL` | `chatbot-agent` | Live LLM responses in `POST /api/chat` |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY` | `payment-api`, `chatbot-agent`, provisioner | AIC provisioner (tenant URL is read from `config/aic/inputs/tenant.json`) |
-| `BRAVO_USER_DEFAULT_PASSWORD` | provisioner | Initial password for demo merchant IDP users |
+| Env var group                                                                         | Apps                                                                     | Feature                                                                                         |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`                                                                         | `merchant-web`, `payment-user-web`, `payment-admin-web`                  | Session cookie signing/encryption (Auth.js v5)                                                  |
+| `MERCHANT_OIDC_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET`                              | `merchant-web`                                                           | Shopper login via the merchant IDP (bravo realm)                                                |
+| `PAYMENT_OIDC_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET`                               | `payment-user-web`, `payment-admin-web`, `payment-api`                   | Consumer/admin login and API JWT validation (payment provider IDP, alpha realm)                 |
+| `PAYMENT_OIDC_JWKS_URI`                                                               | `payment-api`                                                            | JWT middleware — validates incoming Bearer tokens                                               |
+| `PAYMENT_API_BASE_URL`                                                                | `merchant-web`, `payment-user-web`, `payment-admin-web`, `chatbot-agent` | Runtime calls to `payment-api`                                                                  |
+| `PAYMENT_API_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT` + `AIC_IDM_BASE_URL` | `merchant-web`                                                           | Chatbot token proxy — Step 1 bravo→alpha exchange and JIT alpha_user provisioning               |
+| `CHATBOT_AGENT_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT`                    | `chatbot-agent`                                                          | Step 2 alpha user token→Northwind Shopping Assistant token exchange (`northwind-chatbot-agent`) |
+| `NEXT_PUBLIC_CHATBOT_EMBED_URL`                                                       | `merchant-web`                                                           | Configurable overlay URL (defaults to `http://localhost:3004/embed.js`)                         |
+| `OPENAI_API_KEY` / `OPENAI_MODEL`                                                     | `chatbot-agent`                                                          | Live LLM responses in `POST /api/chat`                                                          |
+| `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY`                              | `payment-api`, `chatbot-agent`, provisioner                              | AIC provisioner (tenant URL is read from `config/aic/inputs/tenant.json`)                       |
+| `BRAVO_USER_DEFAULT_PASSWORD`                                                         | provisioner                                                              | Initial password for demo merchant IDP users                                                    |
 
 See [docs/environment.md](./docs/environment.md) for complete per-variable descriptions.
 

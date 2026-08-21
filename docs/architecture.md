@@ -42,13 +42,13 @@ The primary chat surface is the overlay embedded inside `merchant-web` (renders 
 
 ## Apps and ports
 
-| App | Brand | Port | Role |
-| --- | --- | ---: | --- |
-| `merchant-web` | Northwind Retail | 3000 | Demo storefront. Hosts shopper OIDC login. Embeds the Acme Assist overlay on every route. |
-| `payment-user-web` | Acme Payments | 3001 | Consumer-facing payment dashboard (transactions, profile). |
-| `payment-admin-web` | Acme Payments Admin | 3002 | Admin dashboard (funnel-per-merchant view, users, merchants). |
-| `payment-api` | Acme Payments | 3003 | Payment REST API (JWT-protected). Reads and writes JSON seed data. |
-| `chatbot-agent` | Acme Assist | 3004 | Hosts `/embed.js`, standalone `/preview`, and `POST /api/chat`. |
+| App                 | Brand               | Port | Role                                                                                      |
+| ------------------- | ------------------- | ---: | ----------------------------------------------------------------------------------------- |
+| `merchant-web`      | Northwind Retail    | 3000 | Demo storefront. Hosts shopper OIDC login. Embeds the Acme Assist overlay on every route. |
+| `payment-user-web`  | Acme Payments       | 3001 | Consumer-facing payment dashboard (transactions, profile).                                |
+| `payment-admin-web` | Acme Payments Admin | 3002 | Admin dashboard (funnel-per-merchant view, users, merchants).                             |
+| `payment-api`       | Acme Payments       | 3003 | Payment REST API (JWT-protected). Reads and writes JSON seed data.                        |
+| `chatbot-agent`     | Acme Assist         | 3004 | Hosts `/embed.js`, standalone `/preview`, and `POST /api/chat`.                           |
 
 ---
 
@@ -74,7 +74,7 @@ The chatbot requires the shopper's identity to be bridged from the merchant's id
     Authorization: Bearer <alpha user token>
 
  4. chatbot-agent performs Step 2 RFC 8693 exchange
-    alpha user token → chatbot-agent token
+    alpha user token → northwind-chatbot-agent token
     (client_credentials + token-exchange using CHATBOT_AGENT_CLIENT_ID/SECRET)
 
  5. chatbot-agent calls payment-api
@@ -90,9 +90,9 @@ See [identity.md](./identity.md) for a detailed explanation of each IDP, the tok
 
 ## Shared packages
 
-| Package | Description |
-| --- | --- |
-| `@acme/ui` | Tailwind preset, shadcn/ui primitives, `ThemeProvider`, `AppShell`, `ChatShell`. |
+| Package        | Description                                                                                                                                                                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@acme/ui`     | Tailwind preset, shadcn/ui primitives, `ThemeProvider`, `AppShell`, `ChatShell`.                                                                                                                                                                                            |
 | `@acme/shared` | TypeScript domain types (`Merchant`, `Product`, `Cart`, `WalletCard`, `Transaction`, `LoyaltyBalance`, `MerchantIdentity`, `PaymentIdentity`, `CheckoutSession`, `ChatMessage`, `TokenExchangeRequest`, `TokenExchangeResponse`) and JSON read/write helpers for seed data. |
 
 ---
@@ -101,14 +101,14 @@ See [identity.md](./identity.md) for a detailed explanation of each IDP, the tok
 
 The `data/` directory holds JSON files used by `payment-api` and `merchant-web` as the backing store. All reads and writes go through helper functions in `@acme/shared`.
 
-| File | Contents |
-| --- | --- |
-| `merchants.json` | Northwind Retail and Contoso Goods merchant records. |
-| `products.json` | Items across laptop, phone, headphone, gaming, and home categories; each carries a `merchantId`. |
-| `users.json` | Three demo shoppers (Ada Lovelace, Grace Hopper, Alan Turing) — also used as bravo realm user seed data by the AIC provisioner. |
-| `wallet-cards.json` | Fake payment cards keyed by user (last-4, brand, expiry, cardholder — no full PAN). |
-| `transactions.json` | Sample transactions with `merchantId`, `merchantName`, and a `consent: { source, confirmedAt }` sub-object. |
-| `loyalty.json` | Points balances keyed by `(userId, merchantId)` pair. |
+| File                | Contents                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `merchants.json`    | Northwind Retail and Contoso Goods merchant records.                                                                            |
+| `products.json`     | Items across laptop, phone, headphone, gaming, and home categories; each carries a `merchantId`.                                |
+| `users.json`        | Three demo shoppers (Ada Lovelace, Grace Hopper, Alan Turing) — also used as bravo realm user seed data by the AIC provisioner. |
+| `wallet-cards.json` | Fake payment cards keyed by user (last-4, brand, expiry, cardholder — no full PAN).                                             |
+| `transactions.json` | Sample transactions with `merchantId`, `merchantName`, and a `consent: { source, confirmedAt }` sub-object.                     |
+| `loyalty.json`      | Points balances keyed by `(userId, merchantId)` pair.                                                                           |
 
 ---
 

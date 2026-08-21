@@ -64,10 +64,10 @@ Reads the desired-state configuration from `config/aic/inputs/` and idempotently
 
 **Required configuration** (see [environment.md](./environment.md) for full descriptions):
 
-| Source | Purpose |
-| --- | --- |
+| Source                                                 | Purpose                                                                                                                                                                           |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | frodo connection profile (`~/.frodo/Connections.json`) | AIC service account credentials — the provisioner calls `frodo.conn.getConnectionProfileByHost` to retrieve the service account ID and JWK; no env vars needed for authentication |
-| `BRAVO_USER_DEFAULT_PASSWORD` (env var) | Initial password assigned to demo merchant IDP users on creation |
+| `BRAVO_USER_DEFAULT_PASSWORD` (env var)                | Initial password assigned to demo merchant IDP users on creation                                                                                                                  |
 
 If the frodo connection profile for the AIC tenant is missing or has no service account credentials, the provisioner exits with a descriptive error. Run `frodo conn save https://openam-volker-dev.forgeblocks.com/am` to create or refresh the profile. `BRAVO_USER_DEFAULT_PASSWORD` is optional — if absent a built-in fallback is used and a warning is printed.
 
@@ -77,17 +77,17 @@ Resources are declared in `config/aic/inputs/` as JSON files. The provisioner pe
 
 **Payment provider IDP (alpha realm):**
 
-| Resource type | IDs |
-| --- | --- |
-| OAuth2Client | `payment-api`, `payment-user-web`, `payment-admin-web` |
-| AIAgent | `chatbot-agent` |
+| Resource type          | IDs                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                       |
+| OAuth2Client           | `northwind-chatbot-agent` (new; `chatbot-agent` retained)                                    |
 | OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange |
 
 **Merchant IDP (bravo realm):**
 
-| Resource type | IDs |
-| --- | --- |
-| OAuth2Client | `merchant-web` |
+| Resource type                  | IDs                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------ |
+| OAuth2Client                   | `merchant-web`                                                                       |
 | BravoUser (managed/bravo_user) | Three demo shoppers from `data/users.json` (Ada Lovelace, Grace Hopper, Alan Turing) |
 
 Demo users are created with `BRAVO_USER_DEFAULT_PASSWORD` as their initial password. On subsequent runs the profile fields are updated but the password is left unchanged to avoid accidental credential resets.
@@ -107,7 +107,7 @@ Output:
   dry-run  OAuth2Client               [/alpha] payment-api
   dry-run  OAuth2Client               [/alpha] payment-user-web
   dry-run  OAuth2Client               [/alpha] payment-admin-web
-  dry-run  AIAgent                    [/alpha] chatbot-agent
+  dry-run  OAuth2Client               [/alpha] northwind-chatbot-agent
   dry-run  OAuth2TrustedJwtIssuer     [/alpha] bravo-realm
   dry-run  OAuth2Client               [/bravo] merchant-web
   dry-run  BravoUser                  [/bravo] <user-id-1>

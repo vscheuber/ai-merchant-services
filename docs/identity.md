@@ -12,13 +12,13 @@ This project bridges two separate identity domains:
 
 ## Which app authenticates against which IDP
 
-| App | IDP | Mechanism |
-| --- | --- | --- |
-| `merchant-web` | Merchant IDP (bravo) | Auth.js v5 OIDC authorization code flow |
-| `payment-user-web` | Payment provider IDP (alpha) | Auth.js v5 OIDC authorization code flow |
-| `payment-admin-web` | Payment provider IDP (alpha) | Auth.js v5 OIDC authorization code flow |
-| `payment-api` | Payment provider IDP (alpha) | JWT middleware — validates Bearer tokens in incoming requests |
-| `chatbot-agent` | Neither (no end-user login) | Server-side token exchange only; see below |
+| App                 | IDP                          | Mechanism                                                     |
+| ------------------- | ---------------------------- | ------------------------------------------------------------- |
+| `merchant-web`      | Merchant IDP (bravo)         | Auth.js v5 OIDC authorization code flow                       |
+| `payment-user-web`  | Payment provider IDP (alpha) | Auth.js v5 OIDC authorization code flow                       |
+| `payment-admin-web` | Payment provider IDP (alpha) | Auth.js v5 OIDC authorization code flow                       |
+| `payment-api`       | Payment provider IDP (alpha) | JWT middleware — validates Bearer tokens in incoming requests |
+| `chatbot-agent`     | Neither (no end-user login)  | Server-side token exchange only; see below                    |
 
 ---
 
@@ -85,7 +85,7 @@ Performed by `merchant-web`'s `POST /api/chatbot/token` route.
 
 Env vars required: `MERCHANT_OIDC_ISSUER`, `PAYMENT_API_CLIENT_ID`, `PAYMENT_API_CLIENT_SECRET`, `AIC_ALPHA_TOKEN_ENDPOINT`, `AIC_IDM_BASE_URL`.
 
-### Step 2 — Alpha user token → chatbot-agent token
+### Step 2 — Alpha user token → Northwind Shopping Assistant token
 
 Performed by `chatbot-agent`'s `POST /api/chat` handler on every chat request.
 
@@ -95,11 +95,11 @@ The alpha user token from Step 1 is a _user-scoped_ token. To call `payment-api`
 grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 subject_token=<alpha_user_access_token>
 subject_token_type=urn:ietf:params:oauth:token-type:access_token
-client_id=<CHATBOT_AGENT_CLIENT_ID>
+client_id=northwind-chatbot-agent
 client_secret=<CHATBOT_AGENT_CLIENT_SECRET>
 ```
 
-The result is an `access_token` that identifies the chatbot-agent acting on behalf of the shopper. `chatbot-agent` uses this token as the Bearer for all calls to `payment-api`.
+The result is an `access_token` that identifies the Northwind Shopping Assistant acting on behalf of the shopper. The `chatbot-agent` runtime uses this token as the Bearer for all calls to `payment-api`.
 
 Env vars required: `CHATBOT_AGENT_CLIENT_ID`, `CHATBOT_AGENT_CLIENT_SECRET`, `AIC_ALPHA_TOKEN_ENDPOINT`.
 
@@ -125,8 +125,8 @@ Ping AIC provides a first-class identity type called an **AI Agent** (`agent.AIA
 
 **This concept exists only in the payment provider IDP.** The merchant IDP has no equivalent.
 
-`chatbot-agent` is registered as an AI Agent in the payment provider IDP. The AIC provisioner (`pnpm --filter @acme/aic-config provision`) creates this registration under `config/aic/inputs/alpha/ai-agents.json`.
+The current migration provisions `northwind-chatbot-agent` as the OAuth2 client used by the Northwind Shopping Assistant runtime. The existing `chatbot-agent` OAuth2 client remains provisioned and is not deleted or disabled. A first-class AI Agent registration is a separate follow-up task under `config/aic/inputs/alpha/ai-agents.json`.
 
-When calling the payment provider IDP for Step 2, `chatbot-agent` uses a regular `client_credentials`+`token-exchange` grant — not an Authorization Code flow. The `chatbot-agent` OAuth2 client in the payment provider IDP is configured with the `urn:ietf:params:oauth:grant-type:token-exchange` grant type.
+When calling the payment provider IDP for Step 2, the runtime uses a regular OAuth2 `token-exchange` grant — not an Authorization Code flow. The `northwind-chatbot-agent` client in the payment provider IDP is configured with the `urn:ietf:params:oauth:grant-type:token-exchange` grant type.
 
-> **Note:** Although chatbot-agent is registered as an AI Agent in the payment provider IDP, it uses a standard OAuth2 client (`CHATBOT_AGENT_CLIENT_ID`) to perform token exchange. The AI Agent registration provides the identity metadata and agent-specific attributes that Ping uses to track and govern agentic actions; the client credentials handle the OAuth2 protocol mechanics.
+> **Migration note:** `CHATBOT_AGENT_CLIENT_ID` must be set to `northwind-chatbot-agent` for the Northwind runtime. The prior `chatbot-agent` client is intentionally retained until its consumers, callbacks, and secret are reviewed; this task does not delete, disable, or rotate it.
