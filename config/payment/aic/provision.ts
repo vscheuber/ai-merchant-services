@@ -608,9 +608,13 @@ async function upsertMerchantGroup(
     // The group condition depends on custom_merchantId. Verify the schema gate
     // before any group read/upsert so an unsupported tenant cannot be mutated.
     const userSchema = await instance.idm.managed.readManagedObjectSchema('alpha_user', true);
-    if (!userSchema.properties || !('custom_merchantId' in userSchema.properties)) {
+    if (
+      !userSchema.properties ||
+      !('custom_merchantId' in userSchema.properties) ||
+      !('custom_merchantCustomerId' in userSchema.properties)
+    ) {
       throw new Error(
-        'custom_merchantId is absent from alpha_user schema; group provisioning remains blocked',
+        'custom_merchantId and custom_merchantCustomerId are required in alpha_user schema; group provisioning remains blocked',
       );
     }
 

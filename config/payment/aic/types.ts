@@ -78,7 +78,10 @@ export interface MerchantGroupPrefixConfig {
 
 /** Merchant identities that are allowed to own payment-provider groups. */
 export interface MerchantRegistryEntry {
+  /** Canonical identifier persisted in custom_merchantId and group queries. */
   merchantId: string;
+  /** Optional UI/resource identifier, such as mrch_northwind. */
+  resourceId?: string;
   displayName: string;
 }
 
@@ -92,6 +95,19 @@ export interface MerchantGroupPayload {
 
 export interface MerchantGroupConfig extends MerchantGroupPrefixConfig {
   merchants: MerchantRegistryEntry[];
+}
+
+/** Desired payment-provider alpha_user fields used by merchant JIT. */
+export interface PaymentUserPayload {
+  userName: string;
+  givenName: string;
+  sn: string;
+  mail: string;
+  accountStatus: string;
+  custom_merchantId: string;
+  custom_merchantCustomerId: string;
+  /** `_id` is intentionally omitted so IDM generates a UUID. */
+  _id?: never;
 }
 
 /**

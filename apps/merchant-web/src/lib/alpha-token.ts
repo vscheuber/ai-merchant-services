@@ -33,41 +33,47 @@ function normalizeIssuer(issuer: string): string {
   }
   return issuer;
 }
-import type { TokenExchangeRequest, TokenExchangeResponse, TokenTrace, TokenTraceStage } from '@acme/shared';
+import type {
+  TokenExchangeRequest,
+  TokenExchangeResponse,
+  TokenTrace,
+  TokenTraceStage,
+} from '@acme/shared';
 
 type TokenTraceOptions = {
-  enabled?: boolean
-  rawTokens?: boolean
-  onTrace?: (trace: TokenTrace) => void
-}
+  enabled?: boolean;
+  rawTokens?: boolean;
+  onTrace?: (trace: TokenTrace) => void;
+};
 
-let lastTokenTrace: TokenTrace | null = null
+let lastTokenTrace: TokenTrace | null = null;
 
 function publishTrace(stages: TokenTraceStage[], options: TokenTraceOptions): void {
-  if (!options.enabled || !options.onTrace) return
+  if (!options.enabled || !options.onTrace) return;
   const trace: TokenTrace = {
     requestId: crypto.randomUUID(),
     capturedAt: new Date().toISOString(),
     stages: [...stages],
-  }
-  lastTokenTrace = trace
-  options.onTrace(trace)
+  };
+  lastTokenTrace = trace;
+  options.onTrace(trace);
 }
 
 function decodeJwtClaims(token: string): Record<string, unknown> | undefined {
-  const payload = token.split('.')[1]
-  if (!payload) return undefined
+  const payload = token.split('.')[1];
+  if (!payload) return undefined;
   try {
-    const padded = payload.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - payload.length % 4) % 4)
-    const parsed: unknown = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'))
-    if (!parsed || typeof parsed !== 'object') return undefined
-    const claims = { ...(parsed as Record<string, unknown>) }
+    const padded =
+      payload.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (payload.length % 4)) % 4);
+    const parsed: unknown = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    if (!parsed || typeof parsed !== 'object') return undefined;
+    const claims = { ...(parsed as Record<string, unknown>) };
     for (const key of Object.keys(claims)) {
-      if (/token|secret/i.test(key)) delete claims[key]
+      if (/token|secret/i.test(key)) delete claims[key];
     }
-    return claims
+    return claims;
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
@@ -87,7 +93,9 @@ function getMerchantJwks(): ReturnType<typeof createRemoteJWKSet> {
   if (!merchantIssuer) {
     throw new Error('MERCHANT_OIDC_ISSUER environment variable is not set');
   }
-  merchantJwks = createRemoteJWKSet(new URL(`${merchantIssuer.replace(/\/$/, '')}/connect/jwk_uri`));
+  merchantJwks = createRemoteJWKSet(
+    new URL(`${merchantIssuer.replace(/\/$/, '')}/connect/jwk_uri`),
+  );
   return merchantJwks;
 }
 
@@ -192,7 +200,11 @@ async function getServiceAccountToken(
     throw new Error(`Service-account token request failed: ${response.status} ${text}`);
   }
 
-  const data = (await response.json()) as { access_token: string; token_type?: string; scope?: string | string[] };
+  const data = (await response.json()) as {
+    access_token: string;
+    token_type?: string;
+    scope?: string | string[];
+  };
   trace?.push({
     name: 'payment-service-token',
     status: 'succeeded',
@@ -208,46 +220,82 @@ async function getServiceAccountToken(
 
 // ─── AIC IDM helpers ─────────────────────────────────────────────────────────
 
-/**
- * Checks whether a payment-provider managed user with the given _id already exists in AIC IDM.
- * Returns true if the user record was found, false if the IDM API returned 404.
- * Throws on any other non-OK response.
- */
-async function paymentUserExists(sub: string, serviceToken: string, trace?: TokenTraceStage[]): Promise<boolean> {
-  const idmBaseUrl = process.env['AIC_IDM_BASE_URL'];
-  if (!idmBaseUrl) throw new Error('AIC_IDM_BASE_URL environment variable is not set');
-  const endpoint = `${idmBaseUrl}/managed/alpha_user/${encodeURIComponent(sub)}`;
+type PaymentUserRecord = {
+  _id?: string;
+  userName?: string;
+  custom_merchantId?: string;
+  custom_merchantCustomerId?: string;
+};
 
-  const response = await fetch(endpoint, {
-    headers: { Authorization: `Bearer ${serviceToken}` },
-  });
+function getPaymentMerchantId(): string {
+  const merchantId = process.env['PAYMENT_MERCHANT_ID'] ?? 'northwind';
+  if (!/^[a-z][a-z0-9-]*$/.test(merchantId)) {
+    throw new Error('PAYMENT_MERCHANT_ID must be a lowercase merchant identifier.');
+  }
+  return merchantId;
+}
 
-  trace?.push({
-    name: 'idm-lookup',
-    status: response.ok ? 'succeeded' : response.status === 404 ? 'not-found' : 'failed',
-    endpoint,
-    httpStatus: response.status,
-    tokenType: 'Bearer service token',
-  });
+function assertMerchantSchemaWriteGate(): void {
+  if (process.env['AIC_MERCHANT_SCHEMA_APPROVED'] !== 'true') {
+    throw new Error(
+      'Payment merchant identity provisioning is blocked until custom_merchantId and custom_merchantCustomerId schema approval is enabled.',
+    );
+  }
+}
 
-  if (response.ok) return true;
-  if (response.status === 404) return false;
-
-  const text = await response.text();
-  throw new Error(`IDM user lookup failed: ${response.status} ${text}`);
+function escapeQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 /**
- * JIT-provisions a new payment-provider managed user in AIC IDM using a PUT request.
- * The `_id` is set to the merchant JWT's `sub` so that AIC's trusted-JWT-issuer
- * mapping can locate the payment user during token exchange.
- *
- * A 409 (conflict) response is treated as a no-op: another request raced and
- * already created the user.
+ * Finds a payment-provider user by the merchant identity pair. The external
+ * subject is metadata only; it is never used as the payment managed-object ID
+ * or as the payment userName.
+ */
+async function findPaymentUser(
+  merchantId: string,
+  merchantCustomerId: string,
+  serviceToken: string,
+  trace?: TokenTraceStage[],
+): Promise<PaymentUserRecord | undefined> {
+  const idmBaseUrl = process.env['AIC_IDM_BASE_URL'];
+  if (!idmBaseUrl) throw new Error('AIC_IDM_BASE_URL environment variable is not set');
+  const filter =
+    `custom_merchantId eq "${escapeQueryValue(merchantId)}" and ` +
+    `custom_merchantCustomerId eq "${escapeQueryValue(merchantCustomerId)}"`;
+  const endpoint = `${idmBaseUrl}/managed/alpha_user?_queryFilter=${encodeURIComponent(filter)}&_fields=_id,userName,custom_merchantId,custom_merchantCustomerId`;
+  const response = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${serviceToken}` },
+  });
+  const responseText = response.ok ? undefined : (await response.clone().text()).slice(0, 500);
+  trace?.push({
+    name: 'idm-lookup',
+    status: response.ok ? 'succeeded' : 'failed',
+    endpoint,
+    httpStatus: response.status,
+    tokenType: 'Bearer service token',
+    message: responseText,
+  });
+  if (!response.ok) {
+    throw new Error(`IDM user pair lookup failed: ${response.status} ${responseText ?? ''}`.trim());
+  }
+  const data = (await response.json()) as { result?: PaymentUserRecord[] };
+  const matches = data.result ?? [];
+  if (matches.length > 1) {
+    throw new Error(
+      `IDM user pair lookup returned ${matches.length} users; refusing ambiguous identity mapping.`,
+    );
+  }
+  return matches[0];
+}
+
+/**
+ * Creates a payment-provider user without an `_id`, allowing IDM to generate
+ * its UUID. `userName` is generated independently and is not merchant-owned.
  */
 async function createPaymentUser(
-  sub: string,
-  userName: string,
+  merchantId: string,
+  merchantCustomerId: string,
   givenName: string,
   sn: string,
   email: string,
@@ -256,41 +304,41 @@ async function createPaymentUser(
 ): Promise<void> {
   const idmBaseUrl = process.env['AIC_IDM_BASE_URL'];
   if (!idmBaseUrl) throw new Error('AIC_IDM_BASE_URL environment variable is not set');
-
+  const userName = crypto.randomUUID();
   const body = {
-    _id: sub,
     userName,
     givenName,
     sn,
-    // AIC IDM uses `mail` as the attribute name for email in payment-provider managed user.
     mail: email,
     accountStatus: 'active',
+    custom_merchantId: merchantId,
+    custom_merchantCustomerId: merchantCustomerId,
   };
-
-  const endpoint = `${idmBaseUrl}/managed/alpha_user/${encodeURIComponent(sub)}`;
+  const endpoint = `${idmBaseUrl}/managed/alpha_user?_action=create`;
   const response = await fetch(endpoint, {
-    method: 'PUT',
+    method: 'POST',
     headers: {
       Authorization: `Bearer ${serviceToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
   });
-
-  const responseText = response.ok || response.status === 409 ? undefined : (await response.clone().text()).slice(0, 500)
+  const responseText =
+    response.ok || response.status === 409
+      ? undefined
+      : (await response.clone().text()).slice(0, 500);
   trace?.push({
     name: 'idm-jit-provision',
-    status: response.ok || response.status === 409 ? 'succeeded' : 'failed',
+    status: response.ok ? 'succeeded' : response.status === 409 ? 'reconciled' : 'failed',
     endpoint,
     httpStatus: response.status,
     tokenType: 'Bearer service token',
     message: responseText,
   });
-
-  // 201 = created, 200 = replaced, 409 = conflict (race — already exists, safe to ignore).
   if (!response.ok && response.status !== 409) {
-    const text = await response.text();
-    throw new Error(`Failed to JIT-provision payment user '${sub}': ${response.status} ${text}`);
+    throw new Error(
+      `Failed to JIT-provision payment user: ${response.status} ${responseText ?? ''}`.trim(),
+    );
   }
 }
 
@@ -394,10 +442,10 @@ export async function getPaymentTokenDiagnostics(
   sessionUser?: { name?: string | null; email?: string | null } | null,
   traceOptions?: TokenTraceOptions,
 ): Promise<string> {
-  const trace: TokenTraceStage[] = []
-  const traceEnabled = traceOptions?.enabled === true
-  const traceRaw = traceOptions?.rawTokens === true
-  const publish = () => publishTrace(trace, traceOptions ?? {})
+  const trace: TokenTraceStage[] = [];
+  const traceEnabled = traceOptions?.enabled === true;
+  const traceRaw = traceOptions?.rawTokens === true;
+  const publish = () => publishTrace(trace, traceOptions ?? {});
 
   if (traceEnabled) {
     trace.push({
@@ -405,7 +453,7 @@ export async function getPaymentTokenDiagnostics(
       status: 'started',
       tokenType: 'Bearer access token',
       rawToken: traceRaw ? merchantToken : undefined,
-    })
+    });
   }
 
   // 1. Verify and decode the merchant JWT.
@@ -427,16 +475,17 @@ export async function getPaymentTokenDiagnostics(
         rawToken: traceRaw ? merchantToken : undefined,
         message,
         claims: decodeJwtClaims(merchantToken),
-      }
-      publish()
+      };
+      publish();
     }
     throw new Error(`Merchant JWT verification failed: ${message}`);
   }
 
-  const sub = payload.sub ?? '';
-  if (!sub) {
+  const merchantCustomerId = payload.sub ?? '';
+  if (!merchantCustomerId) {
     throw new Error('Merchant JWT is missing the sub claim.');
   }
+  const merchantId = getPaymentMerchantId();
 
   // Extract user claims for JIT provisioning, falling back to session user data.
   // Access tokens issued by the merchant provider may contain only protocol
@@ -458,12 +507,7 @@ export async function getPaymentTokenDiagnostics(
     (payload['email'] as string | undefined) ??
     (payload['mail'] as string | undefined) ??
     sessionUser?.email ??
-    `${sub}@northwind.local`;
-
-  const userName: string =
-    (payload['uid'] as string | undefined) ??
-    (payload['preferred_username'] as string | undefined) ??
-    sub;
+    `${merchantCustomerId}@${merchantId}.local`;
 
   if (traceEnabled) {
     trace[0] = {
@@ -472,54 +516,84 @@ export async function getPaymentTokenDiagnostics(
       tokenType: 'Bearer access token',
       rawToken: traceRaw ? merchantToken : undefined,
       claims: decodeJwtClaims(merchantToken),
-    }
+    };
   }
 
+  // The custom properties are currently absent from the live schema. Keep the
+  // explicit gate in place so this implementation cannot attempt a record write
+  // until the approved schema contract is enabled in the runtime environment.
+  assertMerchantSchemaWriteGate();
+
   // 2. Obtain a service-account payment token for IDM operations.
-  let serviceToken: string
+  let serviceToken: string;
   try {
-    serviceToken = await getServiceAccountToken(traceEnabled ? trace : undefined, traceRaw)
+    serviceToken = await getServiceAccountToken(traceEnabled ? trace : undefined, traceRaw);
   } catch (error) {
     if (traceEnabled) {
       trace.push({
         name: 'payment-service-token',
         status: 'failed',
-        message: error instanceof Error ? error.message.slice(0, 300) : 'Service token request failed',
-      })
-      publish()
+        message:
+          error instanceof Error ? error.message.slice(0, 300) : 'Service token request failed',
+      });
+      publish();
     }
-    throw error
+    throw error;
   }
 
-  // 3. JIT-provision payment_user if not already present.
+  // 3. JIT-provision payment user using the merchant metadata pair.
   try {
-    const exists = await paymentUserExists(sub, serviceToken, traceEnabled ? trace : undefined)
-    if (!exists) {
-      await createPaymentUser(sub, userName, givenName, sn, email, serviceToken, traceEnabled ? trace : undefined)
+    const existing = await findPaymentUser(
+      merchantId,
+      merchantCustomerId,
+      serviceToken,
+      traceEnabled ? trace : undefined,
+    );
+    if (!existing) {
+      await createPaymentUser(
+        merchantId,
+        merchantCustomerId,
+        givenName,
+        sn,
+        email,
+        serviceToken,
+        traceEnabled ? trace : undefined,
+      );
+      // A 409 means another request won the race. Re-read the pair so the
+      // exchange never proceeds after an unverified create outcome.
+      const afterCreate = await findPaymentUser(
+        merchantId,
+        merchantCustomerId,
+        serviceToken,
+        traceEnabled ? trace : undefined,
+      );
+      if (!afterCreate) {
+        throw new Error('IDM user create completed without a readable merchant identity pair.');
+      }
     }
   } catch (error) {
-    if (traceEnabled) publish()
-    throw error
+    if (traceEnabled) publish();
+    throw error;
   }
 
   // 4. Exchange the merchant token for an payment realm user access_token.
-  let paymentToken: string
+  let paymentToken: string;
   try {
     paymentToken = await exchangeMerchantForPaymentToken(
       merchantToken,
       traceEnabled ? trace : undefined,
       traceRaw,
-    )
+    );
   } catch (error) {
-    if (traceEnabled) publish()
-    throw error
+    if (traceEnabled) publish();
+    throw error;
   }
-  if (traceEnabled) publish()
-  return paymentToken
+  if (traceEnabled) publish();
+  return paymentToken;
 }
 
-export const getPaymentToken = getPaymentTokenDiagnostics
+export const getPaymentToken = getPaymentTokenDiagnostics;
 
 export function getLastTokenTrace(): TokenTrace | null {
-  return lastTokenTrace
+  return lastTokenTrace;
 }

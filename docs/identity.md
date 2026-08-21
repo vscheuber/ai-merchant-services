@@ -111,8 +111,9 @@ On the first Step 1 exchange for a given shopper, the shopper will not yet have 
 
 1. Obtain a service-account token via `client_credentials` (`PAYMENT_API_CLIENT_ID` + `PAYMENT_API_CLIENT_SECRET`), using the `fr:idm:*` scope.
 2. Query `managed/alpha_user` by the metadata pair `custom_merchantId == <merchant-id>` and `custom_merchantCustomerId == <merchant-IDP-subject>`; do not use the external subject as the payment-provider managed-object path or `_id`.
-3. If absent, create the payment-provider user with an IDM-generated UUID `_id`, a separate generated UUID `userName`, required profile fields, `custom_merchantId`, and `custom_merchantCustomerId`.
-4. Resolve the resulting payment-provider identity through the trusted issuer/resource-owner contract before the token exchange.
+3. If absent, create the payment-provider user through IDM's auto-ID create endpoint without `_id`; generate a separate UUID `userName`, and persist required profile fields, `custom_merchantId`, and `custom_merchantCustomerId`.
+4. A concurrent `409` is accepted only after a fresh pair lookup confirms the winner. Any other lookup/create status stops the flow.
+5. Resolve the resulting payment-provider identity through the trusted issuer/resource-owner contract before the token exchange.
 
 A concurrent-create response is handled by repeating the metadata lookup and using the existing record; it must not assume that the external subject is the managed-object ID.
 

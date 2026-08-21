@@ -120,7 +120,7 @@ Dry-run is always safe and prints the intended group without reading or writing 
 pnpm --filter @acme/aic-config provision -- --dry-run --provision-merchant-groups
 ```
 
-Normal provisioning does not touch groups. A live group attempt requires both the explicit flag and `AIC_MERCHANT_SCHEMA_APPROVED=true`; the provisioner then reads `alpha_user` schema and refuses before any group write when `custom_merchantId` is absent. Do not set the gate until the custom schema write contract and approval are complete. The `custom_merchantCustomerId` field and UUID JIT migration remain out of scope while schema work is blocked.
+Normal provisioning does not touch groups. A live group attempt requires both the explicit flag and `AIC_MERCHANT_SCHEMA_APPROVED=true`; the provisioner then reads `alpha_user` schema and refuses before any group write when either custom property is absent. Do not set the gate until the custom schema write contract and approval are complete. Runtime JIT provisioning uses the same gate and remains blocked while schema work is unresolved; when enabled, it queries by `(custom_merchantId, custom_merchantCustomerId)`, omits `_id` for IDM UUID generation, and generates a separate UUID `userName`.
 
 ### Dry run
 
