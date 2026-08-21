@@ -137,6 +137,28 @@ Token diagnostics remain redacted by default. Caller-controlled trace headers/bo
 
 This does not remove the token-exchange mapping blocker. The payment provider trusted issuer/resource-owner configuration still uses `sub` as its configured identity claim, while payment users now have IDM-generated UUID identifiers. The tenant must explicitly support mapping that trusted merchant subject to the pair-backed payment user (or an equivalent approved resource-owner mapping) before the exchange can be considered complete. The runtime does not use the external subject as `_id`, `userName`, or a path and does not hide an `invalid_request` exchange response.
 
+## Task 7 trusted-JWT/resource-owner mapping investigation
+
+The current payment-provider desired state is `config/payment/aic/inputs/alpha/trusted-jwt-issuers.json`. It defines one issuer (`bravo-realm`) with:
+
+- `issuer`: the merchant/provider OAuth issuer URL;
+- `jwksUri`: the issuer JWKS endpoint;
+- `jwksCacheTimeout`: `3600000`;
+- `jwkStoreCacheMissCacheTime`: `60000`; and
+- `resourceOwnerIdentityClaim`: `sub`.
+
+The live read-only `/alpha` issuer list returned the same issuer ID and the same `resourceOwnerIdentityClaim: "sub"`, plus `allowedSubjects: []` and `consentedScopesClaim: "scope"`. It did not expose a second mapping field, managed-object type, query filter, merchant ID attribute, or UUID translation rule. The live `alpha_user` query returned UUID `_id` values and `userName` values, but no configured merchant metadata fields in the returned records; no user data was changed.
+
+The pinned Frodo 4.1.7 declarations/source establish the trusted-issuer object fields as `allowedSubjects`, `jwksCacheTimeout`, `jwkSet`, `consentedScopesClaim`, `issuer`, `jwkStoreCacheMissCacheTime`, `resourceOwnerIdentityClaim`, and `jwksUri`. The issuer API is a realm-config CRUD wrapper at `/json<realm>/realm-config/agents/TrustedJwtIssuer/<id>`. Frodo has no additional resource-owner-to-managed-user mapping field or helper. The generated trusted-issuer template defaults `resourceOwnerIdentityClaim` to `sub`; its RFC 7523 helper only optionally restricts `allowedSubjects` and does not translate subjects.
+
+The Ping AIC JWT-bearer documentation establishes that `iss` must match the trusted issuer, `sub` is mandatory, and `sub` is the resource-owner identifier by default. `resourceOwnerIdentityClaim` may select another claim as the resource-owner identity, but `sub` remains mandatory. The documented flow does not perform an arbitrary lookup from that claim to `alpha_user._id`; it explicitly allows a subject that does not correspond to an AIC identity. The AI-agent on-behalf-of documentation likewise expects an already-issued payment user access token whose `sub` is the managed-user UUID. IDM `rsFilter` `subjectMapping`/`staticUserMapping` is a separate IDM bearer-authentication feature, not an established OAuth trusted-JWT token-exchange mapping.
+
+The application Step 1 exchange currently sends only `grant_type`, merchant `subject_token`, `subject_token_type`, `requested_token_type`, `scope`, `client_id`, and `client_secret`. It sends no `resource_owner`, `subject`, mapping selector, merchant ID, or payment UUID. The application deliberately creates an IDM-generated UUID `_id` and keeps merchant `sub` only in the pair-backed metadata, so the exchange cannot succeed by subject/_id equality. The blocker is therefore confirmed: no supported claim/field/configuration for mapping merchant-IDP `sub` to the pair-backed `alpha_user._id` has been established.
+
+Safe options are: (1) obtain Ping/AIC confirmation of a supported scripted trusted-issuer configuration or other approved resource-owner mapping that resolves the merchant subject to the payment user UUID; (2) change the exchange architecture so an authenticated payment-realm token is issued first, with its `sub` already equal to the generated payment UUID, then use that token for the AI-agent exchange; or (3) if the product contract permits it, retain a stable payment-side identifier as the subject only after an approved identity-linking design. Do not add an undocumented issuer field, send an invented exchange parameter, or revert to using an external merchant subject as an IDM `_id`/path.
+
+**Next approval gate:** obtain authoritative tenant/provider documentation or a supported scripted issuer example, then approve one narrow non-production validation with a known test user. The validation must prove issuer/claim configuration, token exchange success, returned access-token `sub` equals the generated payment `_id`, and read-back authorization scoping. No issuer, schema, user, or token-exchange mutation was performed during this investigation.
+
 ## Recommended improvements
 
 Prioritize the following improvements before expanding live provisioning:
