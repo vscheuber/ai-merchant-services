@@ -7,6 +7,7 @@ import type {
   TenantConfig,
   OAuth2ClientPayload,
   AIAgentPayload,
+  ApplicationPayload,
   TrustedJwtIssuerPayload,
   BravoUser,
   ActionRecord,
@@ -35,6 +36,10 @@ function loadAlphaOAuth2Clients(): OAuth2ClientPayload[] {
 
 function loadAlphaAIAgents(): AIAgentPayload[] {
   return loadJson<AIAgentPayload[]>('inputs/alpha/ai-agents.json');
+}
+
+function loadAlphaApplications(): ApplicationPayload[] {
+  return loadJson<ApplicationPayload[]>('inputs/alpha/applications.json');
 }
 
 function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
@@ -270,6 +275,47 @@ async function upsertAIAgent(
   }
 }
 
+async function upsertApplication(
+  applicationId: string,
+  desired: ApplicationPayload,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'Application';
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: applicationId };
+  }
+  try {
+    let live: Record<string, unknown>;
+    try {
+      live = (await instance.app.readApplicationByName(
+        desired.name,
+      )) as unknown as Record<string, unknown>;
+    } catch {
+      await instance.app.createApplication(
+        applicationId,
+        desired as unknown as Parameters<typeof instance.app.createApplication>[1],
+      );
+      console.log(`[${realm}] Application created: ${applicationId}`);
+      return { action: 'created', resourceType, realm, id: applicationId };
+    }
+    const flat = flattenWrapped(live) as Record<string, unknown>;
+    const existingId = typeof flat['_id'] === 'string' ? flat['_id'] : applicationId;
+    const merged = deepMerge(flat, desired as Record<string, unknown>);
+    await instance.app.updateApplication(
+      existingId,
+      merged as Parameters<typeof instance.app.updateApplication>[1],
+    );
+    console.log(`[${realm}] Application updated: ${applicationId}`);
+    return { action: 'updated', resourceType, realm, id: applicationId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[${realm}] Application skipped (${applicationId}): ${msg}`);
+    return { action: 'skipped', resourceType, realm, id: applicationId, error: msg };
+  }
+}
+
 async function upsertBravoUser(
   user: BravoUser,
   instance: FrodoInstance,
@@ -358,6 +404,7 @@ export async function provision(
   // Load inputs
   const alphaClients = loadAlphaOAuth2Clients();
   const alphaAgents = loadAlphaAIAgents();
+  const alphaApplications = loadAlphaApplications();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
   const bravoClients = loadBravoOAuth2Clients();
   const bravoUsers = loadBravoUsers();
@@ -415,6 +462,15 @@ export async function provision(
     if (!id) continue;
     actions.push(
       await upsertAIAgent(id, agent, alphaInstance, '/alpha', dryRun),
+    );
+  }
+
+  // Alpha Applications
+  for (const application of alphaApplications) {
+    const id = application._id;
+    if (!id) continue;
+    actions.push(
+      await upsertApplication(id, application, alphaInstance, '/alpha', dryRun),
     );
   }
 

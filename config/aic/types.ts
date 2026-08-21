@@ -48,6 +48,18 @@ export interface AIAgentPayload extends OAuth2ClientPayload {
   aiAgentIdentityAttributes?: AIAgentIdentityAttributes;
 }
 
+export interface ApplicationPayload {
+  _id?: string;
+  name: string;
+  description: string;
+  templateName: string;
+  templateVersion: string;
+  ssoEntities: {
+    oidcId: string;
+  };
+  [key: string]: unknown;
+}
+
 export interface TrustedJwtIssuerPayload {
   _id?: string;
   issuer: string;
@@ -79,7 +91,12 @@ export interface BravoUser {
 }
 
 export type ActionType = 'created' | 'updated' | 'skipped' | 'dry-run';
-export type ResourceType = 'OAuth2Client' | 'OAuth2TrustedJwtIssuer' | 'AIAgent' | 'BravoUser';
+export type ResourceType =
+  | 'OAuth2Client'
+  | 'OAuth2TrustedJwtIssuer'
+  | 'AIAgent'
+  | 'Application'
+  | 'BravoUser';
 
 export interface ActionRecord {
   action: ActionType;
