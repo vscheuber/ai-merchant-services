@@ -139,25 +139,67 @@ This does not remove the token-exchange mapping blocker. The payment provider tr
 
 ## Task 7 trusted-JWT/resource-owner mapping investigation
 
-The current payment-provider desired state is `config/payment/aic/inputs/alpha/trusted-jwt-issuers.json`. It defines one issuer (`bravo-realm`) with:
+The current payment-provider desired state is `config/payment/aic/inputs/alpha/trusted-jwt-issuers.json`. Its exact issuer payload is:
 
-- `issuer`: the merchant/provider OAuth issuer URL;
-- `jwksUri`: the issuer JWKS endpoint;
-- `jwksCacheTimeout`: `3600000`;
-- `jwkStoreCacheMissCacheTime`: `60000`; and
-- `resourceOwnerIdentityClaim`: `sub`.
+```json
+{
+  "_id": "bravo-realm",
+  "issuer": "https://idc.mytest.run:443/am/oauth2",
+  "jwksCacheTimeout": 3600000,
+  "jwkStoreCacheMissCacheTime": 60000,
+  "jwksUri": "https://idc.mytest.run/am/oauth2/connect/jwk_uri",
+  "resourceOwnerIdentityClaim": "sub"
+}
+```
 
-The live read-only `/alpha` issuer list returned the same issuer ID and the same `resourceOwnerIdentityClaim: "sub"`, plus `allowedSubjects: []` and `consentedScopesClaim: "scope"`. It did not expose a second mapping field, managed-object type, query filter, merchant ID attribute, or UUID translation rule. The live `alpha_user` query returned UUID `_id` values and `userName` values, but no configured merchant metadata fields in the returned records; no user data was changed.
+The live read-only `/alpha` issuer list returned the same issuer ID and `resourceOwnerIdentityClaim: "sub"`, plus `allowedSubjects: []` and `consentedScopesClaim: "scope"`. It did not expose a second mapping field, managed-object type, query filter, merchant ID attribute, or UUID translation rule. The live `alpha_user` query returned UUID `_id` values and `userName` values, but no configured merchant metadata fields in the returned records; no user data was changed.
 
-The pinned Frodo 4.1.7 declarations/source establish the trusted-issuer object fields as `allowedSubjects`, `jwksCacheTimeout`, `jwkSet`, `consentedScopesClaim`, `issuer`, `jwkStoreCacheMissCacheTime`, `resourceOwnerIdentityClaim`, and `jwksUri`. The issuer API is a realm-config CRUD wrapper at `/json<realm>/realm-config/agents/TrustedJwtIssuer/<id>`. Frodo has no additional resource-owner-to-managed-user mapping field or helper. The generated trusted-issuer template defaults `resourceOwnerIdentityClaim` to `sub`; its RFC 7523 helper only optionally restricts `allowedSubjects` and does not translate subjects.
+### Ping-supported scripted issuer surface
 
-The Ping AIC JWT-bearer documentation establishes that `iss` must match the trusted issuer, `sub` is mandatory, and `sub` is the resource-owner identifier by default. `resourceOwnerIdentityClaim` may select another claim as the resource-owner identity, but `sub` remains mandatory. The documented flow does not perform an arbitrary lookup from that claim to `alpha_user._id`; it explicitly allows a subject that does not correspond to an AIC identity. The AI-agent on-behalf-of documentation likewise expects an already-issued payment user access token whose `sub` is the managed-user UUID. IDM `rsFilter` `subjectMapping`/`staticUserMapping` is a separate IDM bearer-authentication feature, not an established OAuth trusted-JWT token-exchange mapping.
+Ping/ForgeRock-provided AIC/AM material is present in the Frodo CLI Cloud and ForgeOps exports and default script template:
 
-The application Step 1 exchange currently sends only `grant_type`, merchant `subject_token`, `subject_token_type`, `requested_token_type`, `scope`, `client_id`, and `client_secret`. It sends no `resource_owner`, `subject`, mapping selector, merchant ID, or payment UUID. The application deliberately creates an IDM-generated UUID `_id` and keeps merchant `sub` only in the pair-backed metadata, so the exchange cannot succeed by subject/_id equality. The blocker is therefore confirmed: no supported claim/field/configuration for mapping merchant-IDP `sub` to the pair-backed `alpha_user._id` has been established.
+- `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/global/scripttype/OAUTH2_SCRIPTED_JWT_ISSUER.scripttype.json`
+- `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/realm/root-alpha/script/OAuth2-JWT-Issuer-Script.script.json`
+- `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/realm/root-alpha/script/OAuth2-JWT-Issuer-Script.script.js`
 
-Safe options are: (1) obtain Ping/AIC confirmation of a supported scripted trusted-issuer configuration or other approved resource-owner mapping that resolves the merchant subject to the payment user UUID; (2) change the exchange architecture so an authenticated payment-realm token is issued first, with its `sub` already equal to the generated payment UUID, then use that token for the AI-agent exchange; or (3) if the product contract permits it, retain a stable payment-side identifier as the subject only after an approved identity-linking design. Do not add an undocumented issuer field, send an invented exchange parameter, or revert to using an external merchant subject as an IDM `_id`/path.
+The supported scripted issuer context receives `issuer`, `realm`, `scriptName`, `logger`, `httpClient`, `idRepository`, and `secrets`. It returns `org.forgerock.oauth2.core.TrustedJwtIssuerConfig`, whose documented constructor/payload is:
 
-**Next approval gate:** obtain authoritative tenant/provider documentation or a supported scripted issuer example, then approve one narrow non-production validation with a known test user. The validation must prove issuer/claim configuration, token exchange success, returned access-token `sub` equals the generated payment `_id`, and read-back authorization scoping. No issuer, schema, user, or token-exchange mutation was performed during this investigation.
+```text
+TrustedJwtIssuerConfig(
+  issuer,
+  resourceOwnerIdentityClaim,
+  consentedScopesClaim,
+  allowedSubjects,
+  jwkSet,
+  jwksUri,
+  jwksCacheTimeout,
+  jwkStoreCacheMissCacheTime
+)
+```
+
+The supplied example uses `idRepository.getIdentity(issuer)` to load issuer configuration and returns issuer metadata plus an allowed-subject list (example source: `mail`). It does not receive the JWT subject as a mapping callback, return a managed-user UUID, rewrite `sub`, or perform a token-exchange resource-owner lookup. Scripted JWT issuer support can dynamically derive trusted-issuer configuration and restrict accepted subjects; it is **not established as a supported external-subject-to-`alpha_user._id` mapping mechanism**. Returning a payment UUID in `allowedSubjects` would only allow that exact incoming subject; it would not translate a merchant subject into that UUID.
+
+The pinned Frodo 4.1.7 declarations/source independently establish the trusted-issuer fields as `allowedSubjects`, `jwksCacheTimeout`, `jwkSet`, `consentedScopesClaim`, `issuer`, `jwkStoreCacheMissCacheTime`, `resourceOwnerIdentityClaim`, and `jwksUri`. The issuer API is a realm-config CRUD wrapper at `/json<realm>/realm-config/agents/TrustedJwtIssuer/<id>`. Frodo has no additional resource-owner-to-managed-user mapping field or helper, and no token-exchange request parameter for one. Its template defaults `resourceOwnerIdentityClaim` to `sub`; its RFC 7523 helper only optionally restricts `allowedSubjects` and does not translate subjects.
+
+The Ping JWT-bearer/script contract establishes that `iss` must match the trusted issuer, `sub` is mandatory, and the configured resource-owner claim identifies the resource owner. Neither the script contract nor the issuer payload documents an arbitrary lookup from that claim to `alpha_user._id`. The AI-agent on-behalf-of flow likewise expects an already-issued payment user access token whose `sub` is the managed-user UUID. IDM `rsFilter` `subjectMapping`/`staticUserMapping` is a separate IDM bearer-authentication feature, not an established OAuth trusted-JWT token-exchange mapping.
+
+The application Step 1 exchange sends this exact form shape (values redacted):
+
+```text
+grant_type=urn:ietf:params:oauth:grant-type:token-exchange
+subject_token=<merchant access token>
+subject_token_type=urn:ietf:params:oauth:token-type:access_token
+requested_token_type=urn:ietf:params:oauth:token-type:access_token
+scope=openid profile email
+client_id=<payment-api client>
+client_secret=<payment-api secret>
+```
+
+It sends no `resource_owner`, `subject`, mapping selector, merchant ID, or payment UUID. The application deliberately creates an IDM-generated UUID `_id` and keeps merchant `sub` only in pair-backed metadata, so the exchange cannot succeed by subject/`_id` equality. **Conclusion: no supported Ping/Frodo scripted mapping has been found that resolves the external merchant subject to the generated payment `alpha_user` UUID or otherwise issues the correct payment resource owner.** Do not add an undocumented issuer field, send an invented exchange parameter, or revert to using an external merchant subject as an IDM `_id`/path.
+
+The minimal alternative is to issue an authenticated payment-realm user token first, with `sub` already equal to the generated payment UUID, and use that token for the AI-agent exchange. If that architecture is not acceptable, obtain Ping/AIC confirmation of another supported resource-owner mapping product/configuration before changing the flow; do not infer one from IDM mappings or the scripted issuer example.
+
+**Next approval gate:** obtain authoritative Ping/AIC confirmation of a supported resource-owner mapping (or approve the payment-token-first alternative), then approve one narrow non-production validation with a known test user. The validation must prove issuer/claim configuration, token exchange success, returned access-token `sub` equals the generated payment `_id`, and read-back authorization scoping. No issuer, script, schema, user, or token-exchange mutation was performed during this investigation.
 
 ## Recommended improvements
 
