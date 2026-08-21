@@ -1,4 +1,4 @@
-/** A redacted or explicitly revealed token-exchange diagnostic stage. */
+/** A redacted or operator-authorized token-exchange diagnostic stage. */
 export interface TokenTraceStage {
   /** Stable stage name, for example `merchant-provider-token` or `idm-lookup`. */
   name: string;

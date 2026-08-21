@@ -27,6 +27,7 @@ cp config/payment/aic/.env.example               config/payment/aic/.env
 | `AIC_ALPHA_TOKEN_ENDPOINT`      | Payment provider IDP (alpha realm) token endpoint. Used for both `client_credentials` (service-account token) and the RFC 8693 token-exchange grant (Step 1).                                                                       |
 | `AIC_IDM_BASE_URL`              | AIC IDM REST API base URL. Used to look up and JIT-provision `managed/alpha_user` records.                                                                                                                                          |
 | `NEXT_PUBLIC_CHATBOT_EMBED_URL` | URL of the chatbot-agent overlay bundle. Exposed to the browser bundle. Defaults to `http://localhost:3004/embed.js` when not set.                                                                                                  |
+| `AIC_ALLOW_RAW_TOKEN_TRACE`     | Optional server-side operator/demo gate for raw caller-token diagnostics. It must be `true` in addition to explicit request opt-in; payment service bearer tokens are never included in traces. Keep unset in normal environments.  |
 
 ---
 

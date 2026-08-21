@@ -46,6 +46,11 @@ type TokenTraceOptions = {
   onTrace?: (trace: TokenTrace) => void;
 };
 
+/** Raw token diagnostics require both caller opt-in and a server-side demo gate. */
+function rawTokenTraceAllowed(): boolean {
+  return process.env['AIC_ALLOW_RAW_TOKEN_TRACE'] === 'true';
+}
+
 let lastTokenTrace: TokenTrace | null = null;
 
 function publishTrace(stages: TokenTraceStage[], options: TokenTraceOptions): void {
@@ -161,10 +166,7 @@ async function verifyMerchantToken(token: string, issuer: string): Promise<JWTPa
  * client_credentials. This token carries the `fr:idm:*` scope required to
  * read and create managed objects in AIC IDM.
  */
-async function getServiceAccountToken(
-  trace?: TokenTraceStage[],
-  traceRaw = false,
-): Promise<string> {
+async function getServiceAccountToken(trace?: TokenTraceStage[]): Promise<string> {
   const clientId = process.env['PAYMENT_API_CLIENT_ID'];
   const clientSecret = process.env['PAYMENT_API_CLIENT_SECRET'];
   const tokenEndpoint = process.env['AIC_ALPHA_TOKEN_ENDPOINT'];
@@ -212,7 +214,7 @@ async function getServiceAccountToken(
     httpStatus: response.status,
     tokenType: data.token_type,
     scope: data.scope,
-    rawToken: traceRaw ? data.access_token : undefined,
+    // Service bearer tokens are never included in traces, even in operator mode.
     claims: decodeJwtClaims(data.access_token),
   });
   return data.access_token;
@@ -221,11 +223,36 @@ async function getServiceAccountToken(
 // ─── AIC IDM helpers ─────────────────────────────────────────────────────────
 
 type PaymentUserRecord = {
-  _id?: string;
-  userName?: string;
-  custom_merchantId?: string;
-  custom_merchantCustomerId?: string;
+  _id?: unknown;
+  userName?: unknown;
+  [attribute: string]: unknown;
 };
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertPaymentUserRecord(
+  record: PaymentUserRecord,
+  merchantId: string,
+  merchantCustomerId: string,
+  attributes: { merchantIdAttribute: string; merchantCustomerIdAttribute: string },
+): void {
+  if (typeof record._id !== 'string' || !UUID_PATTERN.test(record._id)) {
+    throw new Error('IDM payment user read-back is missing a valid UUID _id.');
+  }
+  if (typeof record.userName !== 'string' || !UUID_PATTERN.test(record.userName)) {
+    throw new Error('IDM payment user read-back is missing a valid UUID userName.');
+  }
+  if (record[attributes.merchantIdAttribute] !== merchantId) {
+    throw new Error(
+      `IDM payment user read-back has an unexpected ${attributes.merchantIdAttribute} value.`,
+    );
+  }
+  if (record[attributes.merchantCustomerIdAttribute] !== merchantCustomerId) {
+    throw new Error(
+      `IDM payment user read-back has an unexpected ${attributes.merchantCustomerIdAttribute} value.`,
+    );
+  }
+}
 
 function getPaymentMerchantId(): string {
   const merchantId = process.env['PAYMENT_MERCHANT_ID'] ?? 'northwind';
@@ -469,7 +496,9 @@ export async function getPaymentTokenDiagnostics(
 ): Promise<string> {
   const trace: TokenTraceStage[] = [];
   const traceEnabled = traceOptions?.enabled === true;
-  const traceRaw = traceOptions?.rawTokens === true;
+  // Never expose the service-account token in a trace. Raw caller-token tracing is
+  // restricted to an operator-enabled server environment in addition to opt-in.
+  const traceRaw = traceOptions?.rawTokens === true && rawTokenTraceAllowed();
   const publish = () => publishTrace(trace, traceOptions ?? {});
 
   if (traceEnabled) {
@@ -553,7 +582,7 @@ export async function getPaymentTokenDiagnostics(
   // 2. Obtain a service-account payment token for IDM operations.
   let serviceToken: string;
   try {
-    serviceToken = await getServiceAccountToken(traceEnabled ? trace : undefined, traceRaw);
+    serviceToken = await getServiceAccountToken(traceEnabled ? trace : undefined);
   } catch (error) {
     if (traceEnabled) {
       trace.push({
@@ -599,6 +628,9 @@ export async function getPaymentTokenDiagnostics(
       if (!afterCreate) {
         throw new Error('IDM user create completed without a readable merchant identity pair.');
       }
+      assertPaymentUserRecord(afterCreate, merchantId, merchantCustomerId, identityAttributes);
+    } else {
+      assertPaymentUserRecord(existing, merchantId, merchantCustomerId, identityAttributes);
     }
   } catch (error) {
     if (traceEnabled) publish();

@@ -32,9 +32,13 @@ import { getPaymentToken } from '../../../../lib/alpha-token';
 // ─── Route handler ───────────────────────────────────────────────────────────
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const traceEnabled = request.headers.get('x-demo-token-trace') === 'on'
-  const traceRaw = request.headers.get('x-demo-token-trace-raw') === 'on'
-  let trace: TokenTrace | null = null
+  // Tracing remains redacted by default. Raw caller-token tracing requires both
+  // explicit request opt-in and a server-side operator/demo gate.
+  const traceEnabled = request.headers.get('x-demo-token-trace') === 'on';
+  const traceRaw =
+    request.headers.get('x-demo-token-trace-raw') === 'on' &&
+    process.env['AIC_ALLOW_RAW_TOKEN_TRACE'] === 'true';
+  let trace: TokenTrace | null = null;
 
   // ── 1. Require an active Auth.js session ──────────────────────────────────
   const session = await auth();
@@ -67,7 +71,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       enabled: traceEnabled,
       rawTokens: traceRaw,
       onTrace: (nextTrace) => {
-        trace = nextTrace
+        trace = nextTrace;
       },
     });
   } catch (err) {

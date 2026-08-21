@@ -339,7 +339,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   const confirmedAt = chatRequest.confirmedAt;
   const incomingProposedPurchase = chatRequest.proposedPurchase;
   const traceEnabled = chatRequest.trace === true;
-  const traceRaw = chatRequest.traceRaw === true;
+  // Raw token traces are never caller-controlled. Keep the client opt-in as a
+  // second condition for operator demos, but require a server-side gate too.
+  const traceRaw =
+    chatRequest.traceRaw === true && process.env['AIC_ALLOW_RAW_TOKEN_TRACE'] === 'true';
   const traceStages: TokenTraceStage[] = [];
 
   // ── Step 2 token exchange + user context ─────────────────────────────────
