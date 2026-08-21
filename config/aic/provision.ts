@@ -1,5 +1,6 @@
 import { frodo } from '@rockcarver/frodo-lib';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -220,11 +221,14 @@ async function upsertTrustedJwtIssuer(
   }
 }
 
-function stripAgentIdentityFields(obj: Record<string, unknown>): Record<string, unknown> {
+function stripAgentIdentityReadbackFields(
+  obj: Record<string, unknown>,
+): Record<string, unknown> {
   const result = { ...obj };
+  // These fields are read-only relationship metadata. Keep the desired
+  // aiAgentIdentityAttributes so Frodo can reconcile the first-class identity.
   delete result['aiAgentIdentityUid'];
   delete result['_aiAgentIdentity'];
-  delete result['aiAgentIdentityAttributes'];
   return result;
 }
 
@@ -239,34 +243,51 @@ async function upsertAIAgent(
   if (dryRun) {
     return { action: 'dry-run', resourceType, realm, id: agentId };
   }
-  const safeDesired = stripAgentIdentityFields(desired as Record<string, unknown>);
+  const safeDesired = desired as Record<string, unknown>;
+  // Frodo's createAIAgent identity path expects the identity object under
+  // _aiAgentIdentity (the read path exposes it there), not the flattened
+  // aiAgentIdentityAttributes input shape.
+  const identity = desired.aiAgentIdentityAttributes;
+  const identityData = identity
+    ? {
+        _id: randomUUID(),
+        oauth2ClientId: agentId,
+        name: identity.name,
+        description: identity.description,
+        ...(identity.customAttributes
+          ? { customAttributes: identity.customAttributes }
+          : {}),
+        _privileges: [],
+      }
+    : undefined;
+  const createDesired = identityData
+    ? { ...safeDesired, _aiAgentIdentity: identityData }
+    : safeDesired;
   try {
     let live: Record<string, unknown>;
     try {
-      live = (await instance.agent.readAIAgent(
-        agentId,
-      )) as unknown as Record<string, unknown>;
+      live = (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>;
     } catch {
-      // Pass false for includeAgentIdentity to skip IDM managed-object handling
-      // (the frodo-lib identity sync corrupts array fields on invalid-attribute errors).
-      // The OAuth2 client + AM agent are sufficient for the chatbot auth flow.
+      // Keep identity handling enabled: this creates the first-class IDM
+      // identity and fails the run if that relationship cannot be reconciled.
       await instance.agent.createAIAgent(
         agentId,
-        safeDesired as Parameters<typeof instance.agent.createAIAgent>[1],
-        false,
+        createDesired as Parameters<typeof instance.agent.createAIAgent>[1],
+        true,
       );
-      console.log(`[${realm}] AIAgent created: ${agentId}`);
+      console.log(`[${realm}] AIAgent created with identity: ${agentId}`);
       return { action: 'created', resourceType, realm, id: agentId };
     }
     const flat = flattenWrapped(live) as Record<string, unknown>;
-    const merged = stripAgentIdentityFields(
+    const merged = stripAgentIdentityReadbackFields(
       deepMerge(flat, safeDesired),
     );
     await instance.agent.updateAIAgent(
       agentId,
       merged as Parameters<typeof instance.agent.updateAIAgent>[1],
+      true,
     );
-    console.log(`[${realm}] AIAgent updated: ${agentId}`);
+    console.log(`[${realm}] AIAgent updated with identity: ${agentId}`);
     return { action: 'updated', resourceType, realm, id: agentId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
