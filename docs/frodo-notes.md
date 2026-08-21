@@ -1,0 +1,140 @@
+# Frodo Notes
+
+This note records Frodo-related challenges and improvement opportunities found while implementing Agent IAM Core merchant scoping. It is an engineering follow-up, not a tenant export or an operational runbook. Examples use the project’s conceptual terms **payment provider IDP** and **merchant IDP**; `alpha` and `bravo` remain only where they are literal realm, path, type, or variable names.
+
+## Scope and evidence
+
+The findings below are grounded in:
+
+- The installed `@rockcarver/frodo-lib` **4.1.7** package and its generated declarations/runtime under `config/payment/aic/node_modules/@rockcarver/frodo-lib/`.
+- The provisioner in `config/payment/aic/provision.ts`, its desired state, and the phase-4 and phase-5 task summaries under `.polaris/agent-iam-core-merchant-scoping/task-summaries/`.
+- Read-only live payment provider IDP observations recorded in the phase-1 and phase-5 summaries. No credentials, tokens, or raw tenant exports are reproduced here.
+
+The phase findings are intentionally separated from proposed fixes. A recommendation is not evidence that the tenant supports a particular write contract.
+
+## Library 4.1.7
+
+The application is pinned to `@rockcarver/frodo-lib` `^4.1.7`, and the lockfile resolves **4.1.7**. The package requires Node 20 or newer. Its public declarations expose useful domain operations, including:
+
+- AI Agent read/create/update/delete operations with an `includeAgentIdentity` flag.
+- Application read/create/update/delete operations, with application deletion accepting a `deep` flag.
+- Managed-object record operations and `readManagedObjectSchema`.
+
+The implementation details matter for safe provisioning:
+
+- `createAIAgent` first attempts a read, takes the related identity from `_aiAgentIdentity`, removes `_aiAgentIdentity` from the agent payload before writing the agent, and then creates/link privileges and relationships. A caller that supplies only the flattened `aiAgentIdentityAttributes` shape does not satisfy this create path.
+- AI Agent identity/privilege work is multi-step. The implementation creates or reuses privilege records, links the agent, links the resource application, and attempts reverse links. Some reverse application/group-link errors are logged as optional debug events rather than surfaced as a failed operation.
+- `readManagedObjectSchema` is a schema read. The declarations expose managed-object record writes separately; they do not expose a managed-object schema create/update operation.
+- Application delete defaults to `deep = true` in the public wrapper. The runtime deletes the application record first and invokes dependency deletion only when `deep` is true. The exact dependency set and tenant-side cascade behavior are not established by this code inspection.
+
+The version is therefore usable for the current read/reconcile work, but the application should pin a tested version and maintain focused contract tests around AI Agent identity creation, privilege linking, error propagation, and delete behavior before upgrading.
+
+## CLI and MCP surface
+
+The CLI and MCP surfaces are complementary but not interchangeable:
+
+- The CLI path is the local provisioner: it reads JSON desired state, loads a Frodo connection profile, creates realm-scoped instances, and performs mutations through the library. Its dry run still resolves the connection profile, but it skips tenant API calls after configuration is loaded.
+- The MCP/Frodo read-only probe provided high-value live discovery for application, AI Agent, privilege, group, user, and schema shapes. It established live object types and relationships without writing the tenant.
+- The MCP skill catalog exposed a managed-object schema read but no authoritative schema create/update/delete skill for the requested `alpha_user` custom properties. The absence of that skill is a contract gap, not evidence that an undocumented raw endpoint is safe to call.
+- The CLI and MCP results use different levels of abstraction and error detail. A shape observed through a read skill must still be translated into the exact library method and payload before it is used by the provisioner.
+
+Recommended operating boundary: use MCP read-only discovery to establish live contracts, use the CLI only for an approved and narrowly scoped mutation, and capture read-back evidence after each mutation. Do not infer a write API from a read-only MCP result.
+
+## Unsafe broad read-fallback behavior
+
+Several upsert helpers still treat **any** read exception as “not found” and then attempt a create:
+
+- `upsertOAuth2Client` catches all errors from `readOAuth2Client` before calling `createOAuth2Client`.
+- `upsertTrustedJwtIssuer` catches all errors from its read before calling create.
+- `upsertApplication` catches all errors from `readApplicationByName` before calling create.
+
+This is unsafe because a 401/403, transport outage, malformed response, schema error, rate limit, or transient service failure can be converted into an unintended mutation attempt. It can also obscure the original read failure behind a create failure.
+
+The phase-4 AI Agent path was corrected separately: it now creates only after `readAIAgent` reports a confirmed HTTP 404, and it preserves nested error details. That narrower behavior should be the common pattern for every resource. A read failure must be classified first; only a confirmed not-found status may enter the create branch.
+
+A related inconsistency remains in error handling. The non-agent upserts generally return an action with only `Error.message`, while the AI Agent and stale-application paths use bounded nested diagnostics. The resulting run summary can be actionable for one resource type and opaque for another.
+
+## AI Agent create response and identity handling
+
+The phase-4 work exposed two separate contracts that should be documented and tested:
+
+1. **Payload shape.** Frodo 4.1.7’s `createAIAgent(agentId, agentData, true)` expects the related identity under `_aiAgentIdentity`. The provisioner now builds that object from the desired `aiAgentIdentityAttributes`, including a generated UUID identity `_id`, `oauth2ClientId`, name, description, and an empty `_privileges` array. The flattened desired attributes remain useful for reconciliation but are not sufficient as the create-only relationship shape.
+2. **Response and side effects.** A successful-looking top-level agent operation can involve several underlying writes: the agent, identity-related privileges, agent links, resource application links, subject-group links, and optional reverse links. The caller needs read-back of the agent, identity, privilege records, and relationships rather than trusting only the returned top-level object.
+
+The live phase-4 attempt returned only the generic Frodo message `Error creating ... AI agent`; a follow-up read showed that the first-class agent was still absent. The provisioner was consequently changed to retain nested `originalErrors`, HTTP status/code/message, response data/body, and bounded redacted details. The exact tenant rejection reason still requires an authorized retry or an equivalent authenticated trace; no fallback to an ordinary OAuth client is acceptable.
+
+Improvement opportunity: make the library return a structured result that distinguishes the agent write from each identity/privilege/link step, and make partial creation/rollback behavior explicit. The provisioner should verify identity linkage and privilege relationships immediately after create/update.
+
+## Delete cascade uncertainty
+
+The provisioner’s stale-application cleanup is deliberately opt-in and calls `deleteApplication(id, false)`, followed by a read-back expecting 404. This avoids asking Frodo to remove dependencies as a side effect. The installed declarations and runtime confirm that `deep` controls whether Frodo invokes dependency deletion, but they do not establish:
+
+- Which tenant relationships count as dependencies for an application.
+- Whether non-deep deletion is rejected when relationships remain, leaves dangling references, or removes only the application record.
+- Whether AI Agent identity deletion also removes privileges, reverse application/group links, or other objects in every tenant deployment.
+- Whether a failed multi-step delete leaves a partially modified graph.
+
+The library exposes `deleteAIAgent` and `deleteAIAgents` with documentation saying identity and privileges are deleted, but this note does not treat that description as a verified rollback contract. Before enabling destructive cleanup, capture a dependency-aware read-only inventory, use a disposable/test object where possible, verify each expected relationship after deletion, and document a restoration path.
+
+## Wrapper inconsistencies
+
+The current wrapper layer makes the same tenant failure appear differently depending on the resource:
+
+- Read-then-create logic is broad for clients, trusted issuers, and applications, but status-gated for AI Agents.
+- Some catches return only `Error.message`; others preserve nested Frodo details and redact sensitive keys.
+- `flattenWrapped` recursively unwraps `{ inherited, value }` objects but deliberately passes arrays through unchanged. This is appropriate for some wrappers but can leave wrapped values inside array elements and produce inconsistent merge input.
+- Deep merge preserves live fields and replaces arrays with desired arrays. That is convenient for desired state but can overwrite server-managed relationship arrays or discard live entries when a desired payload contains an array.
+- Frodo’s AI Agent read/create/update methods default `includeAgentIdentity` to true, while the provisioner passes the flag explicitly. Other wrappers have different default field/relationship behavior, making read shape assumptions easy to miss.
+- `readApplicationByName` is used to decide whether an application exists, while the desired application ID is supplied separately. A name collision or differing live `_id` must be treated as a drift condition, not silently normalized.
+
+Recommended improvement: introduce a small shared result/error adapter with explicit `isNotFound`, safe diagnostic serialization, resource/action context, and read-back verification. Keep relationship fields out of generic deep merges unless the resource contract explicitly declares them desired state.
+
+## Diagnostics and safety
+
+The phase-4 investigation showed why top-level messages are insufficient: Frodo wraps transport/API failures and may expose the useful status and response only through nested error fields. The current `formatFrodoError` implementation intentionally limits fields, redacts names matching secret/password/token/authorization/cookie/JWK/private/credential, detects circular objects, and caps output length. This is a good baseline for diagnostics, but coverage is incomplete because it is not used uniformly.
+
+Diagnostics should:
+
+- Preserve HTTP status, response status text, API error reason, and bounded response body where safe.
+- Include realm, resource type, operation, and object ID without including credentials or raw tokens.
+- Distinguish read classification failures from create/update failures.
+- Stop the affected phase on permission, transport, schema, or relationship errors instead of continuing as if the object were absent.
+- Redact values by semantic field and avoid logging entire request/response objects by default.
+
+The existing debug log files and live traces are not treated as documentation sources here; no secrets or raw tokens should be copied into notes, commits, or run summaries.
+
+## Schema API gap
+
+The phase-5 read-only probe confirmed that payment provider IDP `alpha_user` requires `userName`, `givenName`, `sn`, and `mail`, and currently exposes `custom_mail2` and `custom_mobilePhoneNumbers`. The requested `custom_merchantId` and `custom_merchantCustomerId` properties were absent from both the schema property map and order list.
+
+Frodo 4.1.7 exposes `readManagedObjectSchema`, plus managed-object record operations such as create, update, patch, and delete. The available MCP surface likewise returned schema read capability but no authoritative schema mutation skill. Therefore the exact mechanism for adding the two properties remains unverified. A managed-object record patch is not a schema change and must not be used as a substitute.
+
+Still unknown and blocking mutation:
+
+- The authoritative endpoint/configuration artifact and exact payload.
+- Scalar type, length/character policies, requiredness, user-editability, visibility, and search/index behavior.
+- Required administrative role/scope.
+- Impact on existing records, indexes, mappings, dynamic groups, and tokens.
+- Revision/ETag or concurrency semantics, repeat-write behavior, and partial-failure behavior.
+- Supported rollback, including whether a property can be removed or only disabled.
+
+No schema or user-data mutation was performed in phase 5. The safe next step is to identify and review the authoritative write contract, then obtain explicit approval for one narrow mutation and controlled read/write/read-back verification.
+
+## Recommended improvements
+
+Prioritize the following improvements before expanding live provisioning:
+
+1. **Centralize status-gated upserts.** Require confirmed 404 for create fallback across OAuth2 clients, trusted issuers, applications, and AI Agents. Preserve the original error for every other status.
+2. **Standardize structured diagnostics.** Use one redacting formatter and one action-error shape for all resources; include nested Frodo status/response details without secrets.
+3. **Add contract tests against mocked Frodo operations.** Cover 404 create, 401/403 no-create, transport no-create, malformed-read no-create, successful identity/privilege read-back, and partial-link failures.
+4. **Separate desired fields from server relationships.** Replace generic deep merge for relationship-bearing objects with resource-specific merge policies, especially for arrays and reverse links.
+5. **Make create response verification mandatory.** After AI Agent creation, read the agent, identity, privileges, payment API application relationship, and merchant group relationship before reporting success.
+6. **Document destructive-operation contracts.** Establish dependency inventories and rollback procedures for `deep` and non-deep application/AI Agent deletion; do not infer cascade safety from method names or defaults.
+7. **Close the schema API gap.** Add an authoritative read-only discovery/describe path for managed-object schema writes to the MCP surface, including payload schema, permissions, revision semantics, and rollback guidance. Add a library method only after that contract is confirmed.
+8. **Align CLI and MCP contracts.** Define which surface discovers, which surface mutates, and how both represent realms, relationships, pagination, statuses, and errors. Return explicit “unsupported” rather than silently falling back to a broader read or write.
+9. **Pin and regression-test Frodo upgrades.** Treat changes to AI Agent identity shape, include-identity defaults, dependency deletion, and error wrapping as compatibility-sensitive. Review generated declarations and runtime behavior before changing 4.1.7.
+10. **Keep safety boundaries visible.** Retain dry-run, explicit prune flags, no-secret logging, phase stopping on tenant failures, and explicit approval gates for schema and relationship mutations.
+
+## Phase status
+
+The application and Northwind OAuth2/AI Agent desired-state work is present, but the live first-class AI Agent create rejection remains unresolved and custom payment-provider user schema work remains blocked pending an authoritative write contract. These are known Frodo/tenant integration gaps, not reasons to weaken the identity or merchant authorization boundary.
