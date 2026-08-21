@@ -156,7 +156,7 @@ The live read-only `/alpha` issuer list returned the same issuer ID and `resourc
 
 ### Ping-supported scripted issuer surface
 
-Ping/ForgeRock-provided AIC/AM material is present in the Frodo CLI Cloud and ForgeOps exports and default script template:
+Ping/ForgeRock-provided AIC/AM material is present in the Frodo CLI Cloud and ForgeOps exports and default script template. The authoritative public documentation is [AIC OAuth 2.0 JWT Bearer grant](https://docs.pingidentity.com/pingoneaic/latest/am-oauth2/oauth2-jwt-bearer-grant.html), which defines the trusted issuer profile, resource-owner claim, and allowed-subject behavior, and [AIC Token Exchange](https://docs.pingidentity.com/pingoneaic/latest/am-oauth2/token-exchange.html), which limits token exchange to tokens issued by the same OAuth provider and documents claim-copy behavior.
 
 - `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/global/scripttype/OAUTH2_SCRIPTED_JWT_ISSUER.scripttype.json`
 - `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/realm/root-alpha/script/OAuth2-JWT-Issuer-Script.script.json`
