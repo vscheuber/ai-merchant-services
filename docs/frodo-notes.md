@@ -201,6 +201,64 @@ The minimal alternative is to issue an authenticated payment-realm user token fi
 
 **Next approval gate:** obtain authoritative Ping/AIC confirmation of a supported resource-owner mapping (or approve the payment-token-first alternative), then approve one narrow non-production validation with a known test user. The validation must prove issuer/claim configuration, token exchange success, returned access-token `sub` equals the generated payment `_id`, and read-back authorization scoping. No issuer, script, schema, user, or token-exchange mutation was performed during this investigation.
 
+## Task 8 scripted-issuer and Next Generation binding investigation
+
+The proposed workaround was investigated against the Ping documentation and the local Frodo exports. The important distinction is between (a) a scripted issuer resolving issuer configuration and (b) token processing resolving the resource owner from a claim. The first is supported; the second is claim-based and does not provide a callback that can rewrite an incoming merchant subject.
+
+### Confirmed scripted-issuer contract
+
+The AIC JWT-bearer documentation says a scripted JWT issuer may be created as either **Next Generation or Legacy** and must return `org.forgerock.oauth2.core.TrustedJwtIssuerConfig`. Its example uses the supplied `issuer` value to retrieve an external identity via `idRepository`, reads the issuer JWK data, and returns issuer metadata. The JWT must contain both `iss` and `sub`; the example uses both to identify the external entity. The documented `resourceOwnerIdentityClaim` is the name of the claim containing the AIC resource-owner identifier, not the identifier value itself.
+
+The public documentation describes these supported inputs/outputs, but does not say that the complete JWT claims map or the incoming `sub` is passed as a separate script argument. The local default template is more precise about the legacy/scripted-issuer binding: the available variables are `issuer`, `realm`, `scriptName`, `logger`, `httpClient`, `idRepository`, and `secrets`, and the return value is a `TrustedJwtIssuerConfig`. It does not list `openidm`, `jwtAssertion`, `jwtValidator`, `request`, or a subject/claims object.
+
+Local evidence:
+
+- `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/global/scripttype/OAUTH2_SCRIPTED_JWT_ISSUER.scripttype.json` has `bindings: []`, evaluator version `1.0`, and a legacy AM/ForgeRock allow-list. The allow-list includes `TrustedJwtIssuerConfig`, `ScriptedIdentityRepository`, and `PromiseImpl`, but no Next Generation binding descriptor and no `openidm` binding entry.
+- `frodos/vscheuber/frodo-cli/test/e2e/exports/all-separate/cloud/realm/root-alpha/script/OAuth2-JWT-Issuer-Script.script.js` documents exactly the variables above and constructs `new frJava.TrustedJwtIssuerConfig(issuer, 'sub', 'scope', allowedSubjects, jwkSet, jwksUri, jwksCacheTimeout, jwkStoreCacheMissCacheTime)`.
+- `frodos/vscheuber/frodo-cli/src`/the pinned library API exposes only the trusted-issuer configuration fields `allowedSubjects`, `jwksCacheTimeout`, `jwkSet`, `consentedScopesClaim`, `issuer`, `jwkStoreCacheMissCacheTime`, `resourceOwnerIdentityClaim`, and `jwksUri`; the REST wrapper is `/json<realm>/realm-config/agents/TrustedJwtIssuer/<id>`. None is a managed-user ID mapping field.
+
+The AIC common-bindings documentation separately states that `openidm` is a **Next Generation-only** binding and exposes `create`, `read`, `update`, `delete`, `patch`, `action`, and `query`. Its IDM scripting reference documents `openidm.query(resourceName, params, fields)`, a result object with `result` and `resultCount`, common-filter `_queryFilter`, and optional paging/sorting parameters. However, the common-bindings page does not explicitly list `OAUTH2_SCRIPTED_JWT_ISSUER` as a Next Generation context, and the issuer export above does not establish that selecting the Next Generation UI variant adds `openidm` to this context. This is a **confirmed binding distinction** plus an **unresolved deployment/version question**, not evidence that `openidm` is callable from the issuer script.
+
+### Why the proposed lookup cannot perform the requested mapping
+
+Even if Ping confirms that a Next Generation scripted issuer instance can use `openidm.query`, the query would need an input value. The documented issuer script receives `issuer` (the JWT `iss` value), not the JWT `sub` or a `custom_merchantCustomerId` argument. A hypothetical query would therefore only be meaningful if the configured JWT issuer itself were the customer key, which is not the merchant-customer flow:
+
+```javascript
+// Illustrative validation pseudocode only; not an approved production script.
+var q = openidm.query(
+  'managed/alpha_user',
+  { _queryFilter: 'custom_merchantCustomerId eq "' + escapedCustomerId + '"' },
+  ['_id', 'custom_merchantCustomerId']
+);
+if (q.resultCount !== 1) { return null; }
+var paymentId = q.result[0]._id;
+```
+
+The query API can return `_id`; this is **confirmed by the IDM scripting documentation**. The missing `escapedCustomerId` binding and the missing return channel are the blockers. `TrustedJwtIssuerConfig.resourceOwnerIdentityClaim` can be set to a claim name such as `sub` or `payment_user_id`; it cannot be set to the generated UUID value and does not rewrite the incoming claim. Returning `paymentId` in `allowedSubjects` would only allow a token whose incoming subject already equals that UUID. It is an allow-list, not a subject translation map. Returning an arbitrary object with a `resourceOwner`/`resourceOwnerId` field is not a documented constructor or supported issuer return contract.
+
+Token exchange independently closes this path: AIC documents that exchanged tokens preserve subject and issuer claims from the subject token. It does not document a trusted-issuer script callback that replaces the subject after an IDM lookup. Therefore a merchant token with `sub = merchant-subject` cannot become a payment token with `sub = generated-alpha_user._id` merely because a script queried `alpha_user`.
+
+### Inference versus confirmed contract
+
+- **Confirmed:** `openidm.query` exists as a Next Generation binding; its documented call is `openidm.query(resourceName, params, fields)` and its result contains `result`/`resultCount`.
+- **Confirmed:** `TrustedJwtIssuerConfig` carries issuer metadata, claim-name strings, key material/cache values, and an allowed-subject collection; no generated-resource-owner value field is documented.
+- **Confirmed:** `resourceOwnerIdentityClaim` names the claim containing the resource-owner identifier; it is not a value substitution operation.
+- **Confirmed:** AIC token exchange copies the subject and issuer claims from the subject token; no subject rewrite is documented.
+- **Confirmed:** the local `OAUTH2_SCRIPTED_JWT_ISSUER` export has no declared `openidm` binding and the default template has no subject/claims input.
+- **Inference requiring tenant/version validation:** the AIC UI may allow a Next Generation issuer script whose runtime receives `openidm` even though the exported default context is legacy-shaped. No local export, API declaration, or public page inspected here proves that combination.
+- **Inference rejected as unsupported:** `openidm.query` + `TrustedJwtIssuerConfig` cannot by itself translate `custom_merchantCustomerId` to `_id` for the incoming token. The script has no documented per-token customer input and the config has no subject-value return field.
+
+### Concrete no-mutation validation plan
+
+1. Obtain Ping/AIC confirmation for the exact tenant release that **OAUTH2_SCRIPTED_JWT_ISSUER** may run as Next Generation, including the complete binding list and whether `openidm.query` is available. Do not rely on the UI label alone.
+2. In a disposable non-production realm, create only a diagnostic script that logs binding presence/type (never token values), invokes `openidm.query` against `managed/alpha_user` with a fixed test filter, and returns the normal `TrustedJwtIssuerConfig` for a known issuer. First validate script compilation and issuer resolution with a signed test JWT.
+3. If the binding is present, validate exact filter escaping, permission scope, result cardinality (`0`, `1`, and duplicate matches), UUID `_id` read-back, timeout behavior, and whether query is synchronous in this context. The public IDM page documents the call/result shape but not issuer-context async behavior; do not use `await` or promise chaining until the tenant runtime proves it.
+4. Separately test whether the incoming JWT `sub` or a custom claim is exposed to the script. If no per-token customer value is exposed, stop; do not derive it from `issuer`.
+5. If an upstream component can issue a JWT containing `payment_user_id = alpha_user._id`, configure `resourceOwnerIdentityClaim: 'payment_user_id'` and verify the resulting token's resource-owner behavior. This tests claim selection, not script-based translation.
+6. For the current merchant-token flow, validate the supported alternatives: issue a payment-provider token whose `sub` is already the generated `_id`, or obtain an explicit Ping-approved token-exchange/resource-owner mapping mechanism. Prove issuer validation, exchange success, returned `sub == alpha_user._id`, and downstream authorization read-back.
+
+No issuer, script, schema, user, or token mutation was performed. The proposed lookup should remain a hypothesis/diagnostic test until the exact Next Generation issuer binding and a supported claim-to-resource-owner mechanism are confirmed.
+
 ## Recommended improvements
 
 Prioritize the following improvements before expanding live provisioning:
