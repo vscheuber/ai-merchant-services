@@ -7,6 +7,7 @@ import type {
   TenantConfig,
   OAuth2ClientPayload,
   AIAgentPayload,
+  AIAgentIdentityAttributes,
   ApplicationPayload,
   TrustedJwtIssuerPayload,
   BravoUser,
@@ -361,10 +362,41 @@ function plannedAgentAction(realm: string): ActionRecord {
   };
 }
 
+function buildAIAgentCreatePayload(
+  agentId: string,
+  source: Record<string, unknown>,
+  identityAttributes: AIAgentIdentityAttributes,
+): Record<string, unknown> {
+  const payload = stripSensitivePayload({ ...source }) as Record<string, unknown>;
+  // These are read/response metadata. The identity ID is server-assigned and
+  // must never be generated or replayed in a create request.
+  delete payload['_aiAgentIdentity'];
+  delete payload['aiAgentIdentityUid'];
+  delete payload['_type'];
+  return {
+    ...payload,
+    _id: agentId,
+    // The AIC endpoint requires the flattened identity attributes on the
+    // agent payload as well as the nested identity consumed by Frodo's
+    // includeAgentIdentity path.
+    aiAgentIdentityAttributes: stripSensitivePayload(identityAttributes),
+    _aiAgentIdentity: {
+      oauth2ClientId: agentId,
+      name: identityAttributes.name,
+      description: identityAttributes.description,
+      ...(identityAttributes.customAttributes
+        ? { customAttributes: identityAttributes.customAttributes }
+        : {}),
+      _privileges: [],
+    },
+  };
+}
+
 /**
  * Replace only the Northwind OAuth2 client with a first-class AI Agent.
- * This is deliberately separate from ordinary desired-state upserts because
- * deletion is destructive and must be explicitly opted in.
+ * The retry path is intentionally non-destructive: an already-present source
+ * client is a safety failure, while an absent target client may be created
+ * only after an explicit opt-in and a confirmed AI Agent 404.
  */
 async function replaceNorthwindChatbotClient(
   instance: FrodoInstance,
@@ -401,49 +433,14 @@ async function replaceNorthwindChatbotClient(
 
   const actions: ActionRecord[] = [];
   try {
-    let client: Record<string, unknown>;
-    try {
-      client = flattenWrapped(
-        (await instance.oauth2oidc.client.readOAuth2Client(agentId)) as unknown as Record<
-          string,
-          unknown
-        >,
-      ) as Record<string, unknown>;
-    } catch (error) {
-      if (hasHttpStatus(error, 404)) {
-        throw new Error(
-          `OAuth2 client '${agentId}' is already absent; refusing to create an AI Agent without a verified source client. ` +
-            `Restore the client or inspect the tenant and rerun with the migration flag.`,
-        );
-      }
-      throw error;
-    }
-    if (client['_id'] !== agentId) {
-      throw new Error(`preflight OAuth2 client ID mismatch: expected '${agentId}'`);
-    }
-
-    try {
-      await instance.agent.readAIAgent(agentId, true);
-      throw new Error(
-        `AI Agent '${agentId}' already exists; refusing to delete the OAuth2 client. ` +
-          `Inspect the existing agent and remove the migration flag.`,
-      );
-    } catch (error) {
-      if (!hasHttpStatus(error, 404)) throw error;
-    }
-
-    await instance.oauth2oidc.client.deleteOAuth2Client(agentId);
-    actions.push({
-      action: 'deleted',
-      operation: 'delete',
-      resourceType: 'OAuth2Client',
-      realm,
-      id: agentId,
-    });
-
+    // The retry is allowed only when the target protocol client is absent. It
+    // must not delete or overwrite anything: the desired agent config is the
+    // non-secret source for the new client/agent representation.
     try {
       await instance.oauth2oidc.client.readOAuth2Client(agentId);
-      throw new Error(`OAuth2 client '${agentId}' still exists after deletion`);
+      throw new Error(
+        `OAuth2 client '${agentId}' already exists; refusing retry because this path only creates an absent target.`,
+      );
     } catch (error) {
       if (!hasHttpStatus(error, 404)) throw error;
     }
@@ -455,37 +452,43 @@ async function replaceNorthwindChatbotClient(
       id: agentId,
     });
 
-    // Do not generate an identity ID here. The tenant/Frodo create operation is
-    // authoritative; a returned identity _id is required for safe read-back.
-    const liveCoreConfig = (client['coreOAuth2ClientConfig'] ?? {}) as Record<string, unknown>;
-    const safeCoreConfig = Object.fromEntries(
-      Object.entries(liveCoreConfig).filter(([key]) => key !== 'userpassword'),
+    try {
+      await instance.agent.readAIAgent(agentId, true);
+      throw new Error(`AI Agent '${agentId}' already exists; refusing to mutate it on retry.`);
+    } catch (error) {
+      if (!hasHttpStatus(error, 404)) throw error;
+    }
+
+    const createPayload = buildAIAgentCreatePayload(
+      agentId,
+      desiredAgent as Record<string, unknown>,
+      identityAttributes,
     );
-    const createPayload = {
-      _id: agentId,
-      coreOAuth2ClientConfig: stripSensitivePayload(safeCoreConfig),
-      advancedOAuth2ClientConfig: stripSensitivePayload(client['advancedOAuth2ClientConfig']),
-      _aiAgentIdentity: {
-        oauth2ClientId: agentId,
-        name: identityAttributes.name,
-        description: identityAttributes.description,
-        ...(identityAttributes.customAttributes
-          ? { customAttributes: identityAttributes.customAttributes }
-          : {}),
-        _privileges: [],
-      },
-    };
     const created = await instance.agent.createAIAgent(
       agentId,
       createPayload as Parameters<typeof instance.agent.createAIAgent>[1],
       true,
     );
-    const identityId = extractCreatedIdentityId(created);
+
+    // The create response is authoritative when it includes the identity ID.
+    // Frodo 4.1.7 returns only the base agent PUT response, so the approved
+    // fallback is one immediate identity-inclusive read; never synthesize an ID.
+    let identityId = extractCreatedIdentityId(created);
+    let readBack: Record<string, unknown>;
     if (!identityId) {
-      throw new Error(
-        `Frodo createAIAgent returned no identity _id for '${agentId}'. ` +
-          `Installed Frodo 4.1.7 returns the base PUT result; refusing to claim identity creation or generate a fallback ID.`,
-      );
+      readBack = flattenWrapped(
+        (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>,
+      ) as Record<string, unknown>;
+      identityId = readBackIdentityId(readBack);
+      if (!identityId) {
+        throw new Error(
+          `Frodo createAIAgent returned no identity _id for '${agentId}', and the immediate read-back also lacked one; refusing to generate a fallback ID.`,
+        );
+      }
+    } else {
+      readBack = flattenWrapped(
+        (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>,
+      ) as Record<string, unknown>;
     }
     actions.push({
       action: 'created',
@@ -496,9 +499,6 @@ async function replaceNorthwindChatbotClient(
       identityId,
     });
 
-    const readBack = flattenWrapped(
-      (await instance.agent.readAIAgent(agentId, true)) as unknown as Record<string, unknown>,
-    ) as Record<string, unknown>;
     if (readBack['_id'] !== agentId) {
       throw new Error(`AI Agent read-back ID mismatch for '${agentId}'`);
     }
@@ -774,56 +774,65 @@ export async function provision(
 
   const actions: ActionRecord[] = [];
 
-  // Alpha OAuth2Clients. The Northwind client is intentionally absent from
-  // desired state and can only be replaced through the explicit migration.
-  for (const client of alphaClients) {
-    const id = client._id;
-    if (!id) continue;
-    actions.push(await upsertOAuth2Client(id, client, alphaInstance, '/alpha', dryRun));
+  // An explicit live retry is intentionally isolated from normal desired-state
+  // reconciliation. It performs only the guarded agent create/read-back path;
+  // in particular it does not delete anything or update the legacy client.
+  if (replaceNorthwindChatbotClientOptIn && !dryRun) {
+    actions.push(...(await replaceNorthwindChatbotClient(alphaInstance, '/alpha', false)));
+  } else {
+    // Alpha OAuth2Clients. The Northwind client is intentionally absent from
+    // desired state and can only be replaced through the explicit migration.
+    for (const client of alphaClients) {
+      const id = client._id;
+      if (!id) continue;
+      actions.push(await upsertOAuth2Client(id, client, alphaInstance, '/alpha', dryRun));
+    }
+
+    // Dry runs display the deterministic replacement plan without tenant
+    // reads or writes.
+    if (dryRun) {
+      actions.push(...(await replaceNorthwindChatbotClient(alphaInstance, '/alpha', true)));
+    }
   }
 
-  // AI Agent migration is destructive and therefore opt-in. Dry runs always
-  // display the deterministic replacement plan, while live runs without the
-  // flag leave tenant resources untouched for this migration.
-  if (dryRun || replaceNorthwindChatbotClientOptIn) {
-    actions.push(...(await replaceNorthwindChatbotClient(alphaInstance, '/alpha', dryRun)));
-  }
+  const isolatedRetry = replaceNorthwindChatbotClientOptIn && !dryRun;
+  if (!isolatedRetry) {
+    // Alpha Applications
+    for (const application of alphaApplications) {
+      const id = application._id;
+      if (!id) continue;
+      actions.push(await upsertApplication(id, application, alphaInstance, '/alpha', dryRun));
+    }
 
-  // Alpha Applications
-  for (const application of alphaApplications) {
-    const id = application._id;
-    if (!id) continue;
-    actions.push(await upsertApplication(id, application, alphaInstance, '/alpha', dryRun));
-  }
+    // Alpha TrustedJwtIssuers
+    for (const issuer of alphaTrustedIssuers) {
+      const id = issuer._id;
+      if (!id) continue;
+      actions.push(await upsertTrustedJwtIssuer(id, issuer, alphaInstance, '/alpha', dryRun));
+    }
 
-  // Alpha TrustedJwtIssuers
-  for (const issuer of alphaTrustedIssuers) {
-    const id = issuer._id;
-    if (!id) continue;
-    actions.push(await upsertTrustedJwtIssuer(id, issuer, alphaInstance, '/alpha', dryRun));
-  }
+    // Bravo OAuth2Clients
+    for (const client of bravoClients) {
+      const id = client._id;
+      if (!id) continue;
+      actions.push(await upsertOAuth2Client(id, client, bravoInstance, '/bravo', dryRun));
+    }
 
-  // Bravo OAuth2Clients
-  for (const client of bravoClients) {
-    const id = client._id;
-    if (!id) continue;
-    actions.push(await upsertOAuth2Client(id, client, bravoInstance, '/bravo', dryRun));
-  }
+    // Bravo Applications
+    for (const application of bravoApplications) {
+      const id = application._id;
+      if (!id) continue;
+      actions.push(await upsertApplication(id, application, bravoInstance, '/bravo', dryRun));
+    }
 
-  // Bravo Applications
-  for (const application of bravoApplications) {
-    const id = application._id;
-    if (!id) continue;
-    actions.push(await upsertApplication(id, application, bravoInstance, '/bravo', dryRun));
-  }
+    if (pruneStaleApplications) {
+      actions.push(...(await pruneStaleAlphaApplications(alphaInstance, '/alpha', dryRun)));
+    }
 
-  if (pruneStaleApplications) {
-    actions.push(...(await pruneStaleAlphaApplications(alphaInstance, '/alpha', dryRun)));
-  }
-
-  // Bravo Users
-  for (const user of bravoUsers) {
-    actions.push(await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword));
+    // Bravo Users
+    for (const user of bravoUsers) {
+      actions.push(await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword));
+    }
   }
 
   const summary: RunSummary = {
