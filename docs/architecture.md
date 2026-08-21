@@ -118,6 +118,6 @@ The `config/payment/aic/` directory holds the declarative desired-state for the 
 
 - `inputs/tenant.json` — tenant URL and service-account env var names
 - `inputs/alpha/` — payment provider IDP resources: OAuth2 clients, AI agents, trusted JWT issuers, social IDPs
-- `config/merchant/aic/inputs/` — merchant IDP resources: OAuth2 clients, applications, social IDPs, journeys
+- `inputs/bravo/` (under `config/merchant/aic/`) — merchant IDP resources: OAuth2 clients, applications, social IDPs, journeys
 
 See [scripts.md](./scripts.md) for how to run the provisioner.

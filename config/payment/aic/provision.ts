@@ -27,32 +27,43 @@ function loadJson<T>(relPath: string): T {
   return JSON.parse(readFileSync(abs, 'utf-8')) as T;
 }
 
+type AicRealm = 'alpha' | 'bravo';
+
+const realmInputDirectories: Record<AicRealm, string> = {
+  alpha: 'inputs/alpha',
+  bravo: '../../merchant/aic/inputs/bravo',
+};
+
 function loadConfig(): TenantConfig {
   return loadJson<TenantConfig>('inputs/tenant.json');
 }
 
+function loadRealmJson<T>(realm: AicRealm, fileName: string): T {
+  return loadJson<T>(join(realmInputDirectories[realm], fileName));
+}
+
 function loadAlphaOAuth2Clients(): OAuth2ClientPayload[] {
-  return loadJson<OAuth2ClientPayload[]>('inputs/alpha/oauth2-clients.json');
+  return loadRealmJson<OAuth2ClientPayload[]>('alpha', 'oauth2-clients.json');
 }
 
 function loadAlphaAIAgents(): AIAgentPayload[] {
-  return loadJson<AIAgentPayload[]>('inputs/alpha/ai-agents.json');
+  return loadRealmJson<AIAgentPayload[]>('alpha', 'ai-agents.json');
 }
 
 function loadAlphaApplications(): ApplicationPayload[] {
-  return loadJson<ApplicationPayload[]>('inputs/alpha/applications.json');
+  return loadRealmJson<ApplicationPayload[]>('alpha', 'applications.json');
 }
 
 function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
-  return loadJson<TrustedJwtIssuerPayload[]>('inputs/alpha/trusted-jwt-issuers.json');
+  return loadRealmJson<TrustedJwtIssuerPayload[]>('alpha', 'trusted-jwt-issuers.json');
 }
 
 function loadBravoOAuth2Clients(): OAuth2ClientPayload[] {
-  return loadJson<OAuth2ClientPayload[]>('../../merchant/aic/inputs/oauth2-clients.json');
+  return loadRealmJson<OAuth2ClientPayload[]>('bravo', 'oauth2-clients.json');
 }
 
 function loadBravoApplications(): ApplicationPayload[] {
-  return loadJson<ApplicationPayload[]>('../../merchant/aic/inputs/applications.json');
+  return loadRealmJson<ApplicationPayload[]>('bravo', 'applications.json');
 }
 
 function loadBravoUsers(): BravoUser[] {

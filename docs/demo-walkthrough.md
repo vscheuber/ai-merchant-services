@@ -159,7 +159,7 @@ caddy stop          # stops Caddy (or: sudo caddy stop)
 | ---------------------------------------------------------- | ----------------------------------------------------- |
 | `Caddyfile`                                                | Reverse proxy — HTTPS termination, path-based routing |
 | `config/payment/aic/inputs/alpha/oauth2-clients.json`      | Alpha realm OAuth2 clients                            |
-| `config/merchant/aic/inputs/oauth2-clients.json`           | Bravo realm OAuth2 clients                            |
+| `config/merchant/aic/inputs/bravo/oauth2-clients.json`     | Bravo realm OAuth2 clients                            |
 | `config/payment/aic/inputs/alpha/trusted-jwt-issuers.json` | Trusted JWT issuer for token exchange                 |
 | `config/payment/aic/.env`                                  | Provisioner secrets (gitignored)                      |
 | `apps/*/env.local`                                         | Per-app runtime config (gitignored)                   |

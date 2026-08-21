@@ -154,7 +154,7 @@ See [docs/environment.md](./docs/environment.md) for complete per-variable descr
 - **`apps/`** — the five Next.js 15 apps (App Router). Each has its own `package.json`, `tsconfig.json`, `.env.example`, and `src/app/` tree.
 - **`packages/`** — `shared` (types + data helpers) and `ui` (component library).
 - **`data/`** — JSON seed data: merchants, products, users, wallet cards, transactions, loyalty balances.
-- **`config/payment/aic/`** — declarative desired-state for the AIC provisioner. `inputs/tenant.json` holds the tenant URL and service-account env var names. `config/payment/aic/inputs/alpha/` holds payment-provider resources; `config/merchant/aic/inputs/` holds merchant resources (OAuth2 clients, applications, social IDPs, journeys). `provision.ts` is the entry point.
+- **`config/payment/aic/`** — declarative desired-state for the AIC provisioner. `inputs/tenant.json` holds the tenant URL and service-account env var names. `config/payment/aic/inputs/alpha/` holds payment-provider resources; `config/merchant/aic/inputs/bravo/` holds merchant resources (OAuth2 clients, applications, social IDPs, journeys). `provision.ts` is the entry point.
 - **`docs/`** — reference documentation: [architecture.md](./docs/architecture.md), [identity.md](./docs/identity.md), [scripts.md](./docs/scripts.md), [environment.md](./docs/environment.md), [getting-started.md](./docs/getting-started.md).
 - **`scripts/`** — `dev-start.sh`, `dev-stop.sh`, `dev-status.sh`.
 - **`logs/`** — per-service log files (gitignored; populated when services start).

@@ -60,7 +60,7 @@ Service status:
 
 ### `pnpm --filter @acme/aic-config provision`
 
-Reads payment-provider desired state from `config/payment/aic/inputs/` and merchant desired state from `config/merchant/aic/inputs/`, then idempotently creates or updates resources in a live Ping AIC tenant. Uses the `@rockcarver/frodo-lib` SDK.
+Reads payment-provider desired state from realm directories under `config/payment/aic/inputs/` and merchant desired state from `config/merchant/aic/inputs/bravo/`, then idempotently creates or updates resources in a live Ping AIC tenant. Uses the `@rockcarver/frodo-lib` SDK.
 
 **Required configuration** (see [environment.md](./environment.md) for full descriptions):
 
@@ -73,7 +73,7 @@ If the frodo connection profile for the AIC tenant is missing or has no service 
 
 ### What the provisioner creates
 
-Resources are declared in `config/payment/aic/inputs/` as JSON files. The provisioner performs an **upsert**: if a resource exists it is updated (deep-merge); if it does not exist it is created.
+Resources are declared in realm-specific JSON directories: payment-provider resources in `config/payment/aic/inputs/alpha/` and merchant resources in `config/merchant/aic/inputs/bravo/`. The provisioner performs an **upsert**: if a resource exists it is updated (deep-merge); if it does not exist it is created.
 
 **Payment provider IDP (alpha realm):**
 
@@ -107,10 +107,12 @@ Output:
 
 ```
 --- Dry-run plan ---
-  dry-run  OAuth2Client               [/alpha] payment-api
   dry-run  OAuth2Client               [/alpha] payment-user-web
   dry-run  OAuth2Client               [/alpha] payment-admin-web
+  dry-run  OAuth2Client               [/alpha] payment-api
+  dry-run  OAuth2Client               [/alpha] chatbot-agent
   dry-run  OAuth2Client               [/alpha] northwind-chatbot-agent
+  dry-run  AIAgent                    [/alpha] northwind-chatbot-agent
   dry-run  Application                [/alpha] payment-api
   dry-run  Application                [/alpha] payment-user-web
   dry-run  Application                [/alpha] payment-admin-web
