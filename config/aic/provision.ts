@@ -221,6 +221,53 @@ async function upsertTrustedJwtIssuer(
   }
 }
 
+const ERROR_DETAIL_KEYS = new Set([
+  'message',
+  'name',
+  'httpCode',
+  'httpStatus',
+  'httpMessage',
+  'httpErrorReason',
+  'httpErrorText',
+  'httpDescription',
+  'status',
+  'statusText',
+  'data',
+  'body',
+  'originalErrors',
+  'response',
+]);
+const SENSITIVE_ERROR_KEYS = /secret|password|token|authorization|cookie|jwk|private|credential/i;
+
+/**
+ * Preserve Frodo's useful nested HTTP diagnostics without serialising headers
+ * or credentials into the provision output. Frodo wraps transport failures in
+ * `originalErrors`, so retaining that chain is essential when the top-level
+ * message is only "Error creating ... AI agent".
+ */
+function formatFrodoError(error: unknown): string {
+  const seen = new WeakSet<object>();
+
+  const redact = (value: unknown, key?: string): unknown => {
+    if (key && SENSITIVE_ERROR_KEYS.test(key)) return '[redacted]';
+    if (value === null || typeof value !== 'object') return value;
+    if (seen.has(value)) return '[circular]';
+    seen.add(value);
+    if (Array.isArray(value)) return value.map((item) => redact(item));
+
+    const record = value as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const field of ERROR_DETAIL_KEYS) {
+      if (field in record) result[field] = redact(record[field], field);
+    }
+    return result;
+  };
+
+  const details = redact(error);
+  const text = JSON.stringify(details);
+  return text && text !== '{}' ? text.slice(0, 8000) : String(error);
+}
+
 function stripAgentIdentityReadbackFields(
   obj: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -291,7 +338,8 @@ async function upsertAIAgent(
     return { action: 'updated', resourceType, realm, id: agentId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[${realm}] AIAgent skipped (${agentId}): ${msg}`);
+    const detail = formatFrodoError(e);
+    console.error(`[${realm}] AIAgent skipped (${agentId}): ${msg}; details=${detail}`);
     return { action: 'skipped', resourceType, realm, id: agentId, error: msg };
   }
 }
