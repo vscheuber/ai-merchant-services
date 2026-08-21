@@ -77,13 +77,14 @@ Resources are declared in realm-specific JSON directories: payment-provider reso
 
 **Payment provider IDP (alpha realm):**
 
-| Resource type          | IDs                                                                                                                          |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                                                       |
-| OAuth2Client           | `chatbot-agent` (legacy client retained; Northwind replacement is opt-in)                                                    |
-| AIAgent                | `northwind-chatbot-agent` (desired identity; migration deletes only its OAuth2 client)                                       |
-| Application            | `payment-api`, `payment-user-web`, `payment-admin-web` — payment-provider applications linked to the matching OAuth2 clients |
-| OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange                                 |
+| Resource type          | IDs                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                                                         |
+| OAuth2Client           | `chatbot-agent` (legacy client retained; Northwind replacement is opt-in)                                                      |
+| AIAgent                | `northwind-chatbot-agent` (desired identity; migration deletes only its OAuth2 client)                                         |
+| Application            | `payment-api`, `payment-user-web`, `payment-admin-web` — payment-provider applications linked to the matching OAuth2 clients   |
+| OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange                                   |
+| MerchantGroup (opt-in) | `mrch-northwind` — dynamic group for `custom_merchantId == "northwind"`; desired state is gated until the custom schema exists |
 
 **Merchant IDP (bravo realm):**
 
@@ -108,6 +109,18 @@ pnpm --filter @acme/aic-config provision -- --replace-northwind-chatbot-client
 ```
 
 Live migration behavior is narrowly gated. The original destructive attempt deleted the target OAuth2 client, then AIC returned HTTP 500 `AI Agent: Failed to create agent identity.` The retry path therefore performs no deletion: it requires an explicit flag, confirms both the target OAuth2 client and AI Agent are 404, and creates from the non-secret desired agent configuration. The create payload includes both flattened `aiAgentIdentityAttributes` and Frodo's nested `_aiAgentIdentity` with an empty `_privileges` array; no identity UUID is generated. The create response identity `_id` is authoritative when present. With Frodo 4.1.7, whose create response may omit it, the provisioner performs one immediate identity-inclusive read as the documented fallback and then validates the returned identity ID. Any missing or mismatched identity stops the phase without further mutation. The legacy `chatbot-agent` client remains untouched, and secrets are never printed.
+
+### Merchant group provisioning (schema-gated)
+
+Merchant group desired state is isolated behind `--provision-merchant-groups`. The global prefix is `mrch` in `inputs/merchant-groups.json`; the merchant registry currently contains `northwind`, so the derived group is `mrch-northwind` and its condition is `custom_merchantId == "northwind"`.
+
+Dry-run is always safe and prints the intended group without reading or writing the tenant:
+
+```bash
+pnpm --filter @acme/aic-config provision -- --dry-run --provision-merchant-groups
+```
+
+Normal provisioning does not touch groups. A live group attempt requires both the explicit flag and `AIC_MERCHANT_SCHEMA_APPROVED=true`; the provisioner then reads `alpha_user` schema and refuses before any group write when `custom_merchantId` is absent. Do not set the gate until the custom schema write contract and approval are complete. The `custom_merchantCustomerId` field and UUID JIT migration remain out of scope while schema work is blocked.
 
 ### Dry run
 

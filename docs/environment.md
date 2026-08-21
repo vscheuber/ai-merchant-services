@@ -82,9 +82,10 @@ cp config/payment/aic/.env.example               config/payment/aic/.env
 
 ## AIC provisioner (`config/payment/aic`)
 
-| Variable                      | Description                                                                                                                                  |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BRAVO_USER_DEFAULT_PASSWORD` | Initial password assigned to all three demo merchant IDP users when created. If unset, a built-in fallback is used and a warning is printed. |
+| Variable                       | Description                                                                                                                                              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BRAVO_USER_DEFAULT_PASSWORD`  | Initial password assigned to all three demo merchant IDP users when created. If unset, a built-in fallback is used and a warning is printed.             |
+| `AIC_MERCHANT_SCHEMA_APPROVED` | Explicit safety gate for live payment-provider merchant-group writes. Keep unset/false while `custom_merchantId` is absent from the `alpha_user` schema. |
 
 The provisioner authenticates using the frodo connection profile stored at `~/.frodo/Connections.json`. Run `frodo conn save https://openam-volker-dev.forgeblocks.com/am` once to create or refresh the profile. No `AIC_ADMIN_SVC_ACCOUNT_ID` or `AIC_ADMIN_SVC_ACCOUNT_KEY` env vars are required.
 

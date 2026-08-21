@@ -1,0 +1,9 @@
+{
+  "groupPrefix": "mrch",
+  "merchants": [
+    {
+      "merchantId": "northwind",
+      "displayName": "Northwind Retail"
+    }
+  ]
+}

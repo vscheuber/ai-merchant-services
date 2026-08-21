@@ -71,6 +71,29 @@ export interface TrustedJwtIssuerPayload {
   [key: string]: unknown;
 }
 
+/** Stable, tenant-wide prefix used for payment-provider merchant groups. */
+export interface MerchantGroupPrefixConfig {
+  groupPrefix: string;
+}
+
+/** Merchant identities that are allowed to own payment-provider groups. */
+export interface MerchantRegistryEntry {
+  merchantId: string;
+  displayName: string;
+}
+
+/** Desired dynamic group in the payment-provider IDM realm. */
+export interface MerchantGroupPayload {
+  _id?: string;
+  name: string;
+  condition: string;
+  [key: string]: unknown;
+}
+
+export interface MerchantGroupConfig extends MerchantGroupPrefixConfig {
+  merchants: MerchantRegistryEntry[];
+}
+
 /**
  * Represents a `managed/bravo_user` object in the AIC bravo realm.
  * Mirrors the `MerchantIdentity` shape from `@acme/shared`.
@@ -99,6 +122,7 @@ export type ResourceType =
   | 'AIAgent'
   | 'Application'
   | 'BravoUser'
+  | 'MerchantGroup'
   | 'StaleApplication';
 
 export interface ActionRecord {
@@ -109,6 +133,7 @@ export interface ActionRecord {
   operation?: ActionOperation;
   /** Managed alpha_aiagent identity ID; never a secret or credential. */
   identityId?: string;
+  detail?: string;
   error?: string;
 }
 

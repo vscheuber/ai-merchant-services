@@ -11,6 +11,8 @@ import type {
   ApplicationPayload,
   TrustedJwtIssuerPayload,
   BravoUser,
+  MerchantGroupConfig,
+  MerchantGroupPayload,
   ActionRecord,
   ResourceType,
   RunSummary,
@@ -56,6 +58,14 @@ function loadAlphaApplications(): ApplicationPayload[] {
 
 function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
   return loadRealmJson<TrustedJwtIssuerPayload[]>('alpha', 'trusted-jwt-issuers.json');
+}
+
+function loadMerchantGroupConfig(): MerchantGroupConfig {
+  return loadJson<MerchantGroupConfig>('inputs/merchant-groups.json');
+}
+
+function loadAlphaMerchantGroups(): MerchantGroupPayload[] {
+  return loadRealmJson<MerchantGroupPayload[]>('alpha', 'merchant-groups.json');
 }
 
 function loadBravoOAuth2Clients(): OAuth2ClientPayload[] {
@@ -536,6 +546,121 @@ async function replaceNorthwindChatbotClient(
   return actions;
 }
 
+function validateMerchantGroupDesiredState(
+  config: MerchantGroupConfig,
+  groups: MerchantGroupPayload[],
+): void {
+  if (!config.groupPrefix || !/^[a-z][a-z0-9-]*$/.test(config.groupPrefix)) {
+    throw new Error('Merchant group prefix must be a stable lowercase identifier.');
+  }
+  const expected = new Map(
+    config.merchants.map((merchant) => [
+      merchant.merchantId,
+      {
+        name: `${config.groupPrefix}-${merchant.merchantId}`,
+        condition: `custom_merchantId == "${merchant.merchantId}"`,
+      },
+    ]),
+  );
+  for (const group of groups) {
+    const merchantId = group.name.startsWith(`${config.groupPrefix}-`)
+      ? group.name.slice(config.groupPrefix.length + 1)
+      : undefined;
+    const expectedGroup = merchantId ? expected.get(merchantId) : undefined;
+    if (
+      !expectedGroup ||
+      group.name !== expectedGroup.name ||
+      group.condition !== expectedGroup.condition
+    ) {
+      throw new Error(
+        `Merchant group '${group._id ?? group.name}' does not match the global prefix/registry desired state.`,
+      );
+    }
+  }
+  if (groups.length !== expected.size) {
+    throw new Error(
+      'Merchant group desired state must contain exactly one group per registered merchant.',
+    );
+  }
+}
+
+async function upsertMerchantGroup(
+  groupId: string,
+  desired: MerchantGroupPayload,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+  schemaApproved: boolean,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'MerchantGroup';
+  const detail = `name=${desired.name}; condition=${desired.condition}`;
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: groupId, detail };
+  }
+  if (!schemaApproved) {
+    const error =
+      'refusing merchant-group write: set AIC_MERCHANT_SCHEMA_APPROVED=true only after custom_merchantId schema approval';
+    console.error(`[${realm}] MerchantGroup skipped (${groupId}): ${error}`);
+    return { action: 'skipped', resourceType, realm, id: groupId, detail, error };
+  }
+
+  try {
+    // The group condition depends on custom_merchantId. Verify the schema gate
+    // before any group read/upsert so an unsupported tenant cannot be mutated.
+    const userSchema = await instance.idm.managed.readManagedObjectSchema('alpha_user', true);
+    if (!userSchema.properties || !('custom_merchantId' in userSchema.properties)) {
+      throw new Error(
+        'custom_merchantId is absent from alpha_user schema; group provisioning remains blocked',
+      );
+    }
+
+    let live: Record<string, unknown>;
+    try {
+      live = (await instance.idm.managed.readManagedObject('alpha_group', groupId)) as Record<
+        string,
+        unknown
+      >;
+    } catch (error) {
+      if (!hasHttpStatus(error, 404)) throw error;
+      await instance.idm.managed.createManagedObject(
+        'alpha_group',
+        desired as unknown as Parameters<typeof instance.idm.managed.createManagedObject>[1],
+        groupId,
+      );
+      live = (await instance.idm.managed.readManagedObject('alpha_group', groupId)) as Record<
+        string,
+        unknown
+      >;
+      if (live['name'] !== desired.name || live['condition'] !== desired.condition) {
+        throw new Error(`MerchantGroup read-back mismatch for '${groupId}'`);
+      }
+      console.log(`[${realm}] MerchantGroup created: ${groupId} (${detail})`);
+      return { action: 'created', resourceType, realm, id: groupId, detail };
+    }
+
+    const flat = flattenWrapped(live) as Record<string, unknown>;
+    const merged = deepMerge(flat, desired as Record<string, unknown>);
+    await instance.idm.managed.updateManagedObject(
+      'alpha_group',
+      groupId,
+      merged as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+    );
+    const readBack = (await instance.idm.managed.readManagedObject(
+      'alpha_group',
+      groupId,
+    )) as Record<string, unknown>;
+    if (readBack['name'] !== desired.name || readBack['condition'] !== desired.condition) {
+      throw new Error(`MerchantGroup read-back mismatch for '${groupId}'`);
+    }
+    console.log(`[${realm}] MerchantGroup updated: ${groupId} (${detail})`);
+    return { action: 'updated', resourceType, realm, id: groupId, detail };
+  } catch (error) {
+    const msg = formatFrodoError(error);
+    console.error(`[${realm}] MerchantGroup skipped (${groupId}): ${msg}`);
+    return { action: 'skipped', resourceType, realm, id: groupId, detail, error: msg };
+  }
+}
+
 async function upsertApplication(
   applicationId: string,
   desired: ApplicationPayload,
@@ -707,6 +832,7 @@ export async function provision(
   dryRun: boolean,
   pruneStaleApplications = false,
   replaceNorthwindChatbotClientOptIn = false,
+  provisionMerchantGroups = false,
 ): Promise<RunSummary> {
   const { tenantUrl } = config;
 
@@ -734,6 +860,9 @@ export async function provision(
   const alphaClients = loadAlphaOAuth2Clients();
   const alphaApplications = loadAlphaApplications();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
+  const merchantGroupConfig = loadMerchantGroupConfig();
+  const alphaMerchantGroups = loadAlphaMerchantGroups();
+  validateMerchantGroupDesiredState(merchantGroupConfig, alphaMerchantGroups);
   const bravoClients = loadBravoOAuth2Clients();
   const bravoApplications = loadBravoApplications();
   const bravoUsers = loadBravoUsers();
@@ -813,6 +942,16 @@ export async function provision(
       actions.push(await upsertTrustedJwtIssuer(id, issuer, alphaInstance, '/alpha', dryRun));
     }
 
+    if (provisionMerchantGroups) {
+      const schemaApproved = process.env['AIC_MERCHANT_SCHEMA_APPROVED'] === 'true';
+      for (const group of alphaMerchantGroups) {
+        const id = group._id ?? group.name;
+        actions.push(
+          await upsertMerchantGroup(id, group, alphaInstance, '/alpha', dryRun, schemaApproved),
+        );
+      }
+    }
+
     // Bravo OAuth2Clients
     for (const client of bravoClients) {
       const id = client._id;
@@ -872,8 +1011,15 @@ export const main = async (): Promise<void> => {
   const dryRun = process.argv.includes('--dry-run');
   const pruneStaleApplications = process.argv.includes('--prune-stale-applications');
   const replaceNorthwindChatbotClient = process.argv.includes('--replace-northwind-chatbot-client');
+  const provisionMerchantGroups = process.argv.includes('--provision-merchant-groups');
   const config = loadConfig();
-  await provision(config, dryRun, pruneStaleApplications, replaceNorthwindChatbotClient);
+  await provision(
+    config,
+    dryRun,
+    pruneStaleApplications,
+    replaceNorthwindChatbotClient,
+    provisionMerchantGroups,
+  );
 };
 
 main().catch((err: unknown) => {
