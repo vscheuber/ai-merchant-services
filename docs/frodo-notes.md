@@ -33,12 +33,16 @@ The version is therefore usable for the current read/reconcile work, but the app
 
 The CLI and MCP surfaces are complementary but not interchangeable:
 
-- The CLI path is the local provisioner: it reads JSON desired state, loads a Frodo connection profile, creates realm-scoped instances, and performs mutations through the library. Its dry run still resolves the connection profile, but it skips tenant API calls after configuration is loaded.
+- The application provisioner uses the repository-pinned `@rockcarver/frodo-lib` **4.1.7**. It reads JSON desired state, loads a Frodo connection profile, creates realm-scoped instances, and performs mutations through the library. Its dry run still resolves the connection profile, but it skips tenant API calls after configuration is loaded.
+- The locally installed Frodo CLI is newer than the application dependency: `frodo --version` reports CLI **4.7.1** and lib **4.4.2** (with an update notice for CLI 4.7.2). This is useful implementation evidence but is not a substitute for testing the repository-pinned library.
 - The MCP/Frodo read-only probe provided high-value live discovery for application, AI Agent, privilege, group, user, and schema shapes. It established live object types and relationships without writing the tenant.
-- The MCP skill catalog exposed a managed-object schema read but no authoritative schema create/update/delete skill for the requested `alpha_user` custom properties. The absence of that skill is a contract gap, not evidence that an undocumented raw endpoint is safe to call.
+- The MCP skill catalog exposed `idm.managed.readManagedObjectSchema` and managed-record writes, but no schema-specific create/update/delete skill for the requested `alpha_user` custom properties. The absence of a schema-specific MCP skill is a contract gap, not evidence that an undocumented raw endpoint is safe to call.
+- The CLI `idm schema object export/import` commands are not schema-document CRUD commands. They export/import IDM **configuration managed-object artifacts**. In the CLI source, import loads an exported `idm.managed` object and calls Frodo `importSubConfigEntity('managed', ...)`; the library replaces or appends the named object in the `managed.objects` array and updates the parent config entity.
 - The CLI and MCP results use different levels of abstraction and error detail. A shape observed through a read skill must still be translated into the exact library method and payload before it is used by the provisioner.
 
-Recommended operating boundary: use MCP read-only discovery to establish live contracts, use the CLI only for an approved and narrowly scoped mutation, and capture read-back evidence after each mutation. Do not infer a write API from a read-only MCP result.
+A useful but bounded write finding is now established for the IDM configuration artifact: Frodo 4.1.7 declares `updateConfigEntity(entityId, entityData, wait?)`, and its runtime sends `PUT {idmBase}/config/{entityId}`. `idmBase` is the configured IDM host or, by default, the host-only URL plus `/openidm`; therefore the default path is `PUT https://<host>/openidm/config/managed`. The exported/imported payload shape is `{ "_id": "managed", "objects": [ ... ] }` (inside an export wrapper `{ "idm": { "managed": ... }, "meta": ... }`); each object has a `name` and may contain a `schema`. This endpoint/payload is established for IDM configuration managed objects, but it is **not established as an approved or safe alpha_user schema mutation contract for this tenant**. Do not send it merely because the path exists in Frodo source.
+
+Recommended operating boundary: use MCP read-only discovery to establish live contracts, use CLI/library configuration writes only after an approved contract review, and capture read-back evidence after each mutation. Do not infer a schema write API from a managed-record PATCH or from the schema read endpoint.
 
 ## Unsafe broad read-fallback behavior
 
@@ -105,20 +109,25 @@ The existing debug log files and live traces are not treated as documentation so
 
 ## Schema API gap
 
-The phase-5 read-only probe confirmed that payment provider IDP `alpha_user` requires `userName`, `givenName`, `sn`, and `mail`, and currently exposes `custom_mail2` and `custom_mobilePhoneNumbers`. The requested `custom_merchantId` and `custom_merchantCustomerId` properties were absent from both the schema property map and order list.
+The phase-5 read-only probe confirmed that payment provider IDP `alpha_user` requires `userName`, `givenName`, `sn`, and `mail`, and currently exposes `custom_mail2` and `custom_mobilePhoneNumbers`. The requested `custom_merchantId` and `custom_merchantCustomerId` properties were absent from both the schema property map and order list. The current live schema read also shows `custom_mail2` as a searchable=false string with a valid-email policy and `custom_mobilePhoneNumbers` as a searchable=false array of strings; these are observations only, not defaults for the requested properties.
 
-Frodo 4.1.7 exposes `readManagedObjectSchema`, plus managed-object record operations such as create, update, patch, and delete. The available MCP surface likewise returned schema read capability but no authoritative schema mutation skill. Therefore the exact mechanism for adding the two properties remains unverified. A managed-object record patch is not a schema change and must not be used as a substitute.
+The live target is a Cloud deployment at the active Frodo target, and MCP discovery reported 16 managed-object types with schema hydration available. `frodo_find_skills` matched `alpha_user` to `idm.managed.readManagedObjectSchema`; the descriptor requires `type` and optionally `refreshCache`/filter options, is read-only, and explicitly points relationship discovery toward `idm.managed.updateManagedObjectProperties`. No schema-specific create/update/delete skill was returned.
+
+Frodo 4.1.7 exposes `readManagedObjectSchema`, plus managed-object record operations such as create, update, patch, and delete. Its declarations do **not** expose a managed-object schema create/update/delete operation. The managed-record patch runtime is `PATCH {idmBase}/managed/{type}/{id}` with JSON-patch operations and optional `If-Match`; it changes a record, not the type schema, and must not be used as a substitute.
+
+The installed Frodo source does establish a configuration-artifact route: `getManagedObjectSchema` reads `GET {idmBase}/schema/managed/{type}`, while IDM config import updates a parent config entity with `PUT {idmBase}/config/{entityId}`. For an exported managed-object configuration artifact, `entityId` is `managed`, and the payload contains an object named `alpha_user` whose `schema` holds `properties`, `order`, and `required`. This establishes how Frodo's configuration import machinery works, not that this tenant accepts that artifact as the authoritative custom-property change mechanism. The MCP catalog did not expose that config write as an approved schema skill, and no live write was attempted.
 
 Still unknown and blocking mutation:
 
-- The authoritative endpoint/configuration artifact and exact payload.
-- Scalar type, length/character policies, requiredness, user-editability, visibility, and search/index behavior.
-- Required administrative role/scope.
+- Whether `PUT /openidm/config/managed` (or a tenant-specific equivalent) is the authoritative and supported route for editing the live `alpha_user` schema, versus an administrative UI/configuration-control workflow or another service endpoint.
+- The exact minimally scoped payload and whether the complete `managed` configuration artifact is required; do not assume a partial `{objects:[...]}` body is accepted.
+- Scalar type, length/character policies, requiredness, user-editability, visibility, and search/index behavior for each requested property.
+- Required administrative role/scope and whether Cloud configuration writes require additional approval or asynchronous completion (`waitForCompletion=true` is supported by Frodo's generic config writer but is not proven required here).
 - Impact on existing records, indexes, mappings, dynamic groups, and tokens.
 - Revision/ETag or concurrency semantics, repeat-write behavior, and partial-failure behavior.
 - Supported rollback, including whether a property can be removed or only disabled.
 
-No schema or user-data mutation was performed in phase 5. The safe next step is to identify and review the authoritative write contract, then obtain explicit approval for one narrow mutation and controlled read/write/read-back verification.
+No schema or user-data mutation was performed in phase 5 or during this research. The safe next step is to obtain the authoritative tenant/provider documentation or an approved UI/configuration-control trace, compare it with a read-only export, then obtain explicit approval for one narrow mutation and controlled read/write/read-back verification.
 
 ## Recommended improvements
 
