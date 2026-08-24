@@ -1,8 +1,8 @@
 // RFC 8693 token exchange helper for chatbot-agent.
 //
 // Used by `POST /api/chat` (Task 10) to perform Step 2 of the two-step AIC
-// token exchange: exchange an payment realm user token for a chatbot-agent
-// agent token using the chatbot-agent client credentials.
+// token exchange: exchange an payment realm user token for a Northwind Shopping
+// Assistant agent token using the northwind-chatbot-agent client credentials.
 //
 // Uses native `fetch` — no external OAuth2 library required.
 

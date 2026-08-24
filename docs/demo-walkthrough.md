@@ -20,20 +20,20 @@ caddy reload --config Caddyfile   # (or: sudo caddy start --config Caddyfile on 
 
 ## Service Map
 
-| App | Local port | Public URL (via Caddy) | Realm |
-|-----|-----------|------------------------|-------|
-| merchant-web (Northwind Retail) | 3000 | https://northwind.mytest.run | bravo (merchant IDP) |
-| payment-user-web (Acme Payments consumer) | 3001 | https://payments.mytestrun.com | alpha (payment provider IDP) |
-| payment-admin-web (Acme Payments admin) | 3002 | https://payments.mytestrun.com/admin | alpha |
-| payment-api | 3003 | https://payments.mytestrun.com/api | alpha (JWT validation) |
-| chatbot-agent (Acme Assist) | 3004 | https://payments.mytestrun.com/chatbot | alpha |
+| App                                       | Local port | Public URL (via Caddy)                 | Realm                        |
+| ----------------------------------------- | ---------- | -------------------------------------- | ---------------------------- |
+| merchant-web (Northwind Retail)           | 3000       | https://northwind.mytest.run           | bravo (merchant IDP)         |
+| payment-user-web (Acme Payments consumer) | 3001       | https://payments.mytestrun.com         | alpha (payment provider IDP) |
+| payment-admin-web (Acme Payments admin)   | 3002       | https://payments.mytestrun.com/admin   | alpha                        |
+| payment-api                               | 3003       | https://payments.mytestrun.com/api     | alpha (JWT validation)       |
+| chatbot-agent (Acme Assist)               | 3004       | https://payments.mytestrun.com/chatbot | alpha                        |
 
 **IDP domains (AIC custom-domain-scoped sessions):**
 
-| Realm | Domain | Issuer |
-|-------|--------|--------|
+| Realm                        | Domain            | Issuer                              |
+| ---------------------------- | ----------------- | ----------------------------------- |
 | alpha (payment provider IDP) | idc.mytestrun.com | https://idc.mytestrun.com/am/oauth2 |
-| bravo (merchant IDP) | idc.mytest.run | https://idc.mytest.run/am/oauth2 |
+| bravo (merchant IDP)         | idc.mytest.run    | https://idc.mytest.run/am/oauth2    |
 
 ---
 
@@ -41,11 +41,11 @@ caddy reload --config Caddyfile   # (or: sudo caddy start --config Caddyfile on 
 
 All merchant users authenticate against the **bravo realm** (merchant IDP) at `idc.mytest.run`.
 
-| Name | Username | Password | Merchant |
-|------|----------|----------|----------|
+| Name         | Username       | Password     | Merchant                   |
+| ------------ | -------------- | ------------ | -------------------------- |
 | Ada Lovelace | `ada.lovelace` | `Password1!` | Northwind (mrch_northwind) |
 | Grace Hopper | `grace.hopper` | `Password1!` | Northwind (mrch_northwind) |
-| Alan Turing | `alan.turing` | `Password1!` | Contoso (mrch_contoso) |
+| Alan Turing  | `alan.turing`  | `Password1!` | Contoso (mrch_contoso)     |
 
 > Ada and Grace belong to Northwind Retail; Alan belongs to Contoso. The chatbot is wired to Northwind so Alan's token exchange produces a different merchant context.
 
@@ -72,12 +72,15 @@ All merchant users authenticate against the **bravo realm** (merchant IDP) at `i
 
 ---
 
-### Step 3 — Chatbot token exchange (bravo → alpha)
+### Step 3 — Chatbot bridge (bravo → alpha)
 
-When Ada sends her first message, the chatbot performs a two-step token exchange in the background:
+When the widget opens, and again when Ada sends her first message, the chatbot bridges her identity across realms in the background — entirely without involving `merchant-web`:
 
-- **Step 1** (`merchant-web /api/chatbot/token`): exchanges Ada's bravo session token for an alpha realm token using the `payment-api` client credentials (`urn:ietf:params:oauth:grant-type:token-exchange`).
-- **Step 2** (`chatbot-agent /api/chat`): exchanges the alpha token for a `chatbot-agent`-scoped token before forwarding the chat to the OpenAI API and calling back into `payment-api` for contextual data.
+- **Step 1, browser** (`embed.js`): silently reuses Ada's existing bravo SSO cookie to sign into the additive `merchant-bridge` public client (`prompt=none` + PKCE via a small popup), yielding a merchant ID token with zero visible UI.
+- **Step 1, backend** (`chatbot-agent /api/chat`, via `src/lib/merchant-bridge.ts`): runs the `merchant-token-login` AM journey with that ID token, then bridges the resulting AM session into a real alpha access token via the `payment-bridge` confidential client.
+- **Step 2** (`chatbot-agent /api/chat`): exchanges the alpha token for a `northwind-chatbot-agent`-scoped token before forwarding the chat to the OpenAI API and calling back into `payment-api` for contextual data. Unchanged from before.
+
+See [identity.md](./identity.md) for the full protocol detail, including the silent-SSO-vs-token-exchange tradeoff.
 
 ---
 
@@ -85,13 +88,13 @@ When Ada sends her first message, the chatbot performs a two-step token exchange
 
 Type these prompts in the Acme Assist widget to demonstrate different capabilities:
 
-| Prompt | Expected response |
-|--------|-------------------|
-| `What is my account balance?` | Returns Ada's account balance from payment-api |
-| `Show me my recent transactions` | Lists Ada's latest payment records |
-| `What is the status of my last payment?` | Status of the most recent transaction |
-| `I want to pay an invoice` | Chatbot guides through the payment flow |
-| `Who am I?` | Returns Ada Lovelace / Northwind Retail identity from the token |
+| Prompt                                   | Expected response                                               |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `What is my account balance?`            | Returns Ada's account balance from payment-api                  |
+| `Show me my recent transactions`         | Lists Ada's latest payment records                              |
+| `What is the status of my last payment?` | Status of the most recent transaction                           |
+| `I want to pay an invoice`               | Chatbot guides through the payment flow                         |
+| `Who am I?`                              | Returns Ada Lovelace / Northwind Retail identity from the token |
 
 ---
 
@@ -155,11 +158,11 @@ caddy stop          # stops Caddy (or: sudo caddy stop)
 
 ## Key Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `Caddyfile` | Reverse proxy — HTTPS termination, path-based routing |
-| `config/aic/inputs/alpha/oauth2-clients.json` | Alpha realm OAuth2 clients |
-| `config/aic/inputs/bravo/oauth2-clients.json` | Bravo realm OAuth2 clients |
-| `config/aic/inputs/alpha/trusted-jwt-issuers.json` | Trusted JWT issuer for token exchange |
-| `config/aic/.env` | Provisioner secrets (gitignored) |
-| `apps/*/env.local` | Per-app runtime config (gitignored) |
+| File                                                       | Purpose                                               |
+| ---------------------------------------------------------- | ----------------------------------------------------- |
+| `Caddyfile`                                                | Reverse proxy — HTTPS termination, path-based routing |
+| `config/payment/aic/inputs/alpha/oauth2-clients.json`      | Alpha realm OAuth2 clients                            |
+| `config/merchant/aic/inputs/bravo/oauth2-clients.json`     | Bravo realm OAuth2 clients                            |
+| `config/payment/aic/inputs/alpha/trusted-jwt-issuers.json` | Trusted JWT issuer for token exchange                 |
+| `config/payment/aic/.env`                                  | Provisioner secrets (gitignored)                      |
+| `apps/*/env.local`                                         | Per-app runtime config (gitignored)                   |

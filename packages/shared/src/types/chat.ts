@@ -37,10 +37,19 @@ export interface ProposedPurchase {
 }
 
 /**
- * Body sent by the client (embed.js or merchant-web) to `POST /api/chat`.
+ * Body sent by the client (embed.js) to `POST /api/chat`.
  *
- * `accessToken` carries the payment realm user token (Step 1 result) so the
- * chatbot-agent server can perform Step 2 without a separate round-trip.
+ * On the first chat turn after a successful silent-SSO popup, the widget has
+ * only a one-time-use PKCE authorization code pair (`merchantAuthCode` +
+ * `merchantCodeVerifier`); the chatbot-agent server exchanges it for a
+ * merchant ID token itself (server-to-server, so the merchant IDP never
+ * needs browser-facing CORS configured for its token endpoint) and returns
+ * that token in `ChatResponse.merchantToken` for the widget to cache. Every
+ * subsequent turn sends that cached `merchantToken` directly instead —
+ * skipping the (already-consumed) auth code. Either form feeds into Step 1
+ * (the `merchant-token-login` AM journey, then the session→token bridge)
+ * before Step 2. All are absent when the shopper has no merchant IDP session
+ * (guest mode) — the assistant still answers catalog questions without them.
  *
  * When `confirmedAt` and `proposedPurchase` are both present, the chatbot-agent
  * server interprets the request as a checkout confirmation event and calls
@@ -49,8 +58,14 @@ export interface ProposedPurchase {
 export interface ChatRequest {
   /** Conversation history to send to the LLM. */
   messages: readonly ChatMessage[];
-  /** Payment realm access token for the authenticated shopper, if available. */
-  accessToken?: string;
+  /** PKCE authorization code from the widget's silent-SSO popup. Only sent on the first turn; superseded by `merchantToken` once the server returns one. */
+  merchantAuthCode?: string;
+  /** PKCE code verifier for the same silent-SSO attempt. Required alongside `merchantAuthCode`. */
+  merchantCodeVerifier?: string;
+  /** Merchant ID token, once already exchanged server-side and cached by the widget (see `ChatResponse.merchantToken`). Takes priority over `merchantAuthCode` when both are somehow present. */
+  merchantToken?: string;
+  /** Canonical merchant identifier for the merchant this session belongs to. Required alongside `merchantAuthCode` or `merchantToken`. */
+  merchantId?: string;
   /**
    * ISO-8601 timestamp of the shopper's "Confirm & pay" button click.
    * When present together with `proposedPurchase`, triggers a checkout call
@@ -84,6 +99,13 @@ export interface ChatResponse {
    * slot and disable further input until the shopper confirms or dismisses.
    */
   proposedPurchase?: ProposedPurchase;
+  /**
+   * The merchant ID token, present only when this request freshly exchanged
+   * `merchantAuthCode` for one. The widget must cache this and send it back
+   * as `merchantToken` on subsequent turns — the auth code that produced it
+   * is already consumed and cannot be reused.
+   */
+  merchantToken?: string;
   /** Token-exchange diagnostics returned only when requested by the demo UI. */
   trace?: import('./token-trace').TokenTrace;
 }

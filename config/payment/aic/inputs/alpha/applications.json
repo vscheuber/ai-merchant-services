@@ -1,0 +1,32 @@
+[
+  {
+    "_id": "payment-api",
+    "name": "payment-api",
+    "description": "Payment API service",
+    "templateName": "service",
+    "templateVersion": "1.0",
+    "ssoEntities": {
+      "oidcId": "payment-api"
+    }
+  },
+  {
+    "_id": "payment-user-web",
+    "name": "payment-user-web",
+    "description": "Payment user web application",
+    "templateName": "web",
+    "templateVersion": "1.0",
+    "ssoEntities": {
+      "oidcId": "payment-user-web"
+    }
+  },
+  {
+    "_id": "payment-admin-web",
+    "name": "payment-admin-web",
+    "description": "Payment admin web application",
+    "templateName": "web",
+    "templateVersion": "1.0",
+    "ssoEntities": {
+      "oidcId": "payment-admin-web"
+    }
+  }
+]

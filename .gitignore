@@ -19,8 +19,8 @@ coverage/
 .env.*.local
 
 # AIC provisioning outputs — keep the folder via .gitkeep only
-config/aic/outputs/**
-!config/aic/outputs/.gitkeep
+config/payment/aic/outputs/**
+!config/payment/aic/outputs/.gitkeep
 
 # Logs — keep the folder via .gitkeep only
 logs/**
@@ -45,3 +45,6 @@ Thumbs.db
 .playwright-mcp/
 .claude/
 .pnpm-store/
+
+# Local Caddy TLS/PKI data dir (used to work around a root-owned default cert store)
+.caddy-data/

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<!--
+  Silent-SSO popup callback page.
+
+  Registered as the `redirect_uri` for the `merchant-bridge` public client in
+  the merchant IDP (bravo realm). The popup opened by `embed.js`'s
+  `attemptSilentSso()` navigates here after the merchant IDP either issues a
+  code (shopper has a live SSO session) or reports an error (e.g.
+  `login_required` — no session, the ordinary guest case).
+
+  This page never talks to chatbot-agent's backend or merchant-web — it only
+  relays the query string back to the window that opened the popup via
+  `postMessage`, then closes itself. `embed.js` validates the message's
+  `origin` (must match this page's own origin) before trusting its contents.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Signing in…</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        'use strict';
+        var params = new URLSearchParams(window.location.search);
+        var payload = {
+          source: 'acme-assist-silent-sso',
+          code: params.get('code'),
+          state: params.get('state'),
+          error: params.get('error') || params.get('error_description'),
+        };
+        if (window.opener) {
+          // Target origin '*': this page carries no secret (an authorization
+          // code for a public PKCE client is useless without the matching
+          // code_verifier, which never leaves the opener). The opener is
+          // responsible for validating `event.origin` before trusting this
+          // message — see embed.js's attemptSilentSso().
+          window.opener.postMessage(payload, '*');
+        }
+        window.close();
+      })();
+    </script>
+  </body>
+</html>

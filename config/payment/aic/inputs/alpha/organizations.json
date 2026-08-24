@@ -1,0 +1,14 @@
+[
+  {
+    "merchantId": "northwind",
+    "name": "Northwind Retail Shopping",
+    "merchantTrustedIssuerConfig": {
+      "oidcValidationType": "WELL_KNOWN_URL",
+      "oidcValidationValue": "https://idc.mytest.run/am/oauth2/.well-known/openid-configuration",
+      "idTokenIssuer": "https://idc.mytest.run:443/am/oauth2",
+      "audienceName": "merchant-bridge",
+      "authorisedParties": ["none", "merchant-bridge"],
+      "unreasonableLifetimeLimit": 3600
+    }
+  }
+]

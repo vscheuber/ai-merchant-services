@@ -10,11 +10,22 @@
  * ChatShell in `@acme/ui` but does NOT import from `@acme/ui` — a <script>-tag
  * embed cannot ES-import from a workspace package at runtime.
  *
- * Interactive behaviour (Task 11):
- *   - On open: fetches a short-lived payment-provider token from the merchant-web
- *     token proxy (`GET /api/chatbot/token`). 401 → shows "Please sign in".
- *   - Send button + Enter key: posts `{ messages, accessToken }` to the
- *     chatbot-agent `/api/chat` endpoint and renders the assistant response.
+ * Interactive behaviour:
+ *   - On open: attempts silent SSO into the merchant IDP's payment-provider-owned
+ *     `merchant-bridge` public client (`prompt=none` + PKCE, via a small popup —
+ *     see `silent-callback.html`). If the shopper has a live merchant IDP session,
+ *     this yields a merchant ID token with zero UI. If not (guest, popup blocked,
+ *     `login_required`), the widget falls back to guest mode — no error shown,
+ *     guests can still browse the catalog. Never touches merchant-web's own
+ *     session/login code; this is an entirely separate, additive OIDC client.
+ *   - Send button + Enter key: posts `{ messages, merchantId, ...credential }` to
+ *     the chatbot-agent `/api/chat` endpoint, where `...credential` is either the
+ *     one-time PKCE `{ merchantAuthCode, merchantCodeVerifier }` pair (first turn)
+ *     or a cached `{ merchantToken }` (every turn after — the backend exchanges the
+ *     code once and echoes the resulting merchant ID token back for the widget to
+ *     cache, since the code itself is single-use). The backend performs the code
+ *     exchange, the merchant-token-login journey, and the session→token bridge
+ *     (Step 1) itself, then renders the assistant response.
  *   - "Confirm & pay" button becomes active when the chatbot proposes a purchase
  *     (`proposedPurchase` in the response). Clicking it sends a confirmation
  *     request with `confirmedAt` and displays the checkout result.
@@ -44,11 +55,21 @@
     ? _selfScript.src.replace(/\/embed\.js([?#].*)?$/, '')
     : '';
 
-  // The host page owns the token proxy; the chatbot API is served by this bundle's host.
-  var TOKEN_URL = (window.CHATBOT_CONFIG && window.CHATBOT_CONFIG.tokenUrl) || '/api/chatbot/token';
+  // The chatbot API is served by this bundle's host.
   var CHAT_URL =
     (window.CHATBOT_CONFIG && window.CHATBOT_CONFIG.chatUrl) ||
     (_chatbotBase ? _chatbotBase + '/api/chat' : '/chatbot/api/chat');
+
+  // ── Silent-SSO config ───────────────────────────────────────────────────────
+  // Set by the host page (merchant-web's root layout or equivalent) — the
+  // additive, per-merchant trust setup. Any field missing skips silent SSO
+  // entirely and the widget starts in guest mode.
+  var cfg = window.CHATBOT_CONFIG || {};
+  var MERCHANT_ID = cfg.merchantId || null;
+  var MERCHANT_IDP_AUTHORIZE_URL = cfg.merchantIdpAuthorizeUrl || null;
+  var MERCHANT_BRIDGE_CLIENT_ID = cfg.merchantBridgeClientId || null;
+  var SILENT_CALLBACK_URL = cfg.silentCallbackUrl || null;
+  var SSO_POPUP_TIMEOUT_MS = 4000;
   var traceEnabled = false;
   var traceRaw = false;
 
@@ -78,12 +99,22 @@
   // ── Module-level state ─────────────────────────────────────────────────────
   // Preserved across open/close cycles so conversation is not lost on minimise.
 
-  /** Payment realm access token; null until the token proxy call succeeds. */
-  var accessToken = null;
+  /**
+   * PKCE authorization code + verifier from silent SSO, null until the popup
+   * flow succeeds. Single-use — sent to the backend once, which exchanges it
+   * for a merchant ID token and hands that back for `merchantToken` to cache
+   * (see the chatbot:trace-independent response handling in sendMessage).
+   */
+  var merchantAuthCode = null;
+  var merchantCodeVerifier = null;
+  /** Merchant ID token, once the backend has exchanged the auth code for one. */
+  var merchantToken = null;
   var guestSession = true;
 
-  /** True while a token fetch is in-flight — prevents duplicate requests. */
-  var tokenFetching = false;
+  /** True while the silent-SSO popup flow is in-flight — prevents duplicate attempts. */
+  var ssoInFlight = false;
+  /** True once a silent-SSO attempt has run (success or fallback) — attempted only once per page load. */
+  var ssoAttempted = false;
 
   /** Ordered conversation turns for the LLM (system turns excluded). */
   var messageHistory = []; // { role: 'user'|'assistant', content: string }[]
@@ -369,85 +400,196 @@
 
   // ── Re-enable input ────────────────────────────────────────────────────────
 
+  /** True once the widget has some merchant credential to send with the next chat request. */
+  function hasMerchantCredential() {
+    return Boolean(merchantToken || (merchantAuthCode && merchantCodeVerifier));
+  }
+
+  /**
+   * Fields to merge into the next `/api/chat` request body. Prefers the
+   * cached merchant ID token (from a prior response) over the one-time PKCE
+   * code, since the code is already consumed once the backend exchanges it.
+   */
+  function merchantCredentialFields() {
+    if (merchantToken) return { merchantToken: merchantToken, merchantId: MERCHANT_ID };
+    if (merchantAuthCode && merchantCodeVerifier) {
+      return {
+        merchantAuthCode: merchantAuthCode,
+        merchantCodeVerifier: merchantCodeVerifier,
+        merchantId: MERCHANT_ID,
+      };
+    }
+    return {};
+  }
+
+  /** Cache a merchant ID token the backend just exchanged from our one-time code. */
+  function cacheMerchantTokenFromResponse(data) {
+    if (data && data.merchantToken) {
+      merchantToken = data.merchantToken;
+      merchantAuthCode = null;
+      merchantCodeVerifier = null;
+    }
+  }
+
   /** Remove the readonly guard from the textarea once an async operation completes. */
   function reenableInput() {
-    if (activeTextarea && accessToken) {
+    if (activeTextarea && hasMerchantCredential()) {
       activeTextarea.removeAttribute('readonly');
     }
   }
 
-  // ── Token fetch ────────────────────────────────────────────────────────────
+  // ── Silent SSO (Step 1, browser side) ──────────────────────────────────────
+  //
+  // Reuses the shopper's existing merchant IDP SSO cookie (established entirely
+  // by the merchant's own login, unrelated to this widget) to silently obtain a
+  // merchant ID token via a payment-provider-owned public client
+  // (`merchant-bridge`), using OIDC `prompt=none` + PKCE through a tiny popup.
+  // Failure of any kind (no session, popup blocked, config missing) is a normal
+  // guest-mode fallback, not an error — no bubble is shown.
+
+  function base64UrlEncode(bytes) {
+    var binary = '';
+    for (var i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function randomString() {
+    var bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    return base64UrlEncode(bytes);
+  }
+
+  function sha256Base64Url(value) {
+    var data = new TextEncoder().encode(value);
+    return window.crypto.subtle.digest('SHA-256', data).then(function (digest) {
+      return base64UrlEncode(new Uint8Array(digest));
+    });
+  }
+
+  /** Fall back to guest mode: unlock the textarea, leave merchant credentials null. */
+  function ssoFallbackToGuest(reason) {
+    guestSession = true;
+    ssoInFlight = false;
+    if (reason) {
+      console.warn('[acme-assist] silent SSO fallback to guest: ' + reason);
+    }
+    if (activeTextarea) activeTextarea.removeAttribute('readonly');
+  }
 
   /**
-   * Fetch a short-lived payment-provider access token from the merchant-web token
-   * proxy (`GET /api/chatbot/token`).
+   * Attempt silent SSO into the merchant IDP once per page load. No-ops if
+   * already attempted/in-flight, or if any required config field is missing
+   * (widget stays in guest mode).
    *
-   * On HTTP 401: appends a "please sign in" assistant bubble; textarea stays
-   * read-only so the shopper cannot send messages.
-   * On success: stores the token in `accessToken` and removes the readonly guard
-   * from the textarea, enabling the shopper to start typing.
+   * The resulting PKCE code+verifier are handed to the chat backend, not
+   * exchanged here: the merchant IDP's token endpoint has no CORS headers
+   * for browser-originated requests, and chatbot-agent's backend can do that
+   * exchange itself server-to-server (see sendMessage/confirmAndPay).
    */
-  function fetchAccessToken() {
-    if (tokenFetching || accessToken) return;
-    tokenFetching = true;
+  function attemptSilentSso() {
+    if (hasMerchantCredential() || ssoInFlight || ssoAttempted) return;
+    if (!MERCHANT_ID || !MERCHANT_IDP_AUTHORIZE_URL || !MERCHANT_BRIDGE_CLIENT_ID || !SILENT_CALLBACK_URL) {
+      ssoAttempted = true;
+      ssoFallbackToGuest('silent SSO not configured for this merchant');
+      return;
+    }
+    if (!window.crypto || !window.crypto.subtle || !window.open) {
+      ssoAttempted = true;
+      ssoFallbackToGuest('crypto.subtle or window.open unavailable');
+      return;
+    }
 
-    fetch(TOKEN_URL, {
-      headers: traceEnabled
-        ? {
-            'x-demo-token-trace': 'on',
-            'x-demo-token-trace-raw': traceRaw ? 'on' : 'off',
-          }
-        : undefined,
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          if (data && data.trace) {
-            window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
-          }
-          if (res.status === 401) {
-            guestSession = true;
-            if (activeTextarea) activeTextarea.removeAttribute('readonly');
-            appendBubble(
-              'assistant',
-              'Your shopping session has expired. Please sign in again to use personalised features, or continue as a guest for product recommendations.',
-            );
-            return null;
-          }
-          if (!res.ok) {
-            appendBubble(
-              'assistant',
-              'Unable to start a session. Please refresh the page and try again.',
-            );
-            return null;
-          }
-          return data;
-        });
-      })
-      .then(function (data) {
-        if (!data) return;
-        accessToken = data.accessToken || null;
-        guestSession = !accessToken;
-        if (!accessToken) {
-          if (activeTextarea) activeTextarea.removeAttribute('readonly');
+    ssoInFlight = true;
+    var codeVerifier = randomString();
+    var state = randomString();
+    var callbackOrigin;
+    try {
+      callbackOrigin = new URL(SILENT_CALLBACK_URL, window.location.href).origin;
+    } catch {
+      ssoAttempted = true;
+      ssoFallbackToGuest('invalid silentCallbackUrl');
+      return;
+    }
+
+    sha256Base64Url(codeVerifier)
+      .then(function (codeChallenge) {
+        var authorizeUrl =
+          MERCHANT_IDP_AUTHORIZE_URL +
+          '?' +
+          new URLSearchParams({
+            client_id: MERCHANT_BRIDGE_CLIENT_ID,
+            response_type: 'code',
+            redirect_uri: SILENT_CALLBACK_URL,
+            scope: 'openid profile email',
+            prompt: 'none',
+            code_challenge: codeChallenge,
+            code_challenge_method: 'S256',
+            state: state,
+          }).toString();
+
+        var popup = window.open(
+          authorizeUrl,
+          'acme-assist-sso',
+          'width=1,height=1,left=-1000,top=-1000',
+        );
+        if (!popup) {
+          ssoAttempted = true;
+          ssoFallbackToGuest('popup blocked');
           return;
         }
-        if (data.trace) {
-          window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+
+        var settled = false;
+        var timeoutId = window.setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          window.removeEventListener('message', onMessage);
+          try {
+            popup.close();
+          } catch {
+            // Popup may already be closed/cross-origin — ignore.
+          }
+          ssoAttempted = true;
+          ssoFallbackToGuest('silent SSO timed out');
+        }, SSO_POPUP_TIMEOUT_MS);
+
+        function onMessage(event) {
+          if (event.origin !== callbackOrigin) return;
+          var data = event.data || {};
+          if (data.source !== 'acme-assist-silent-sso' || data.state !== state) return;
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          window.removeEventListener('message', onMessage);
+          try {
+            popup.close();
+          } catch {
+            // Ignore.
+          }
+          ssoAttempted = true;
+
+          if (data.error || !data.code) {
+            ssoFallbackToGuest(data.error || 'no authorization code returned');
+            return;
+          }
+
+          // Hand the code+verifier to the chat backend, which exchanges it
+          // for a merchant ID token itself (see sendMessage) — the browser
+          // never calls the merchant IDP's token endpoint directly.
+          merchantAuthCode = data.code;
+          merchantCodeVerifier = codeVerifier;
+          guestSession = false;
+          ssoInFlight = false;
+          if (activeTextarea) {
+            activeTextarea.removeAttribute('readonly');
+            activeTextarea.focus();
+          }
         }
-        if (activeTextarea) {
-          activeTextarea.removeAttribute('readonly');
-          activeTextarea.focus();
-        }
+
+        window.addEventListener('message', onMessage);
       })
-      .catch(function () {
-        appendBubble(
-          'assistant',
-          'Unable to connect. Please refresh the page and try again.',
-        );
-      })
-      .then(function () {
-        // Runs after both success and error branches — simulates Promise.finally.
-        tokenFetching = false;
+      .catch(function (err) {
+        ssoAttempted = true;
+        ssoFallbackToGuest(err && err.message ? err.message : 'PKCE setup failed');
       });
   }
 
@@ -478,12 +620,16 @@
     fetch(CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messageHistory,
-        ...(accessToken ? { accessToken: accessToken } : {}),
-        trace: traceEnabled,
-        traceRaw: traceRaw,
-      }),
+      body: JSON.stringify(
+        Object.assign(
+          {
+            messages: messageHistory,
+            trace: traceEnabled,
+            traceRaw: traceRaw,
+          },
+          merchantCredentialFields(),
+        ),
+      ),
     })
       .then(function (res) {
         if (!res.ok) {
@@ -504,6 +650,7 @@
         if (data && data.trace) {
           window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
         }
+        cacheMerchantTokenFromResponse(data);
 
         var content =
           data && data.message && typeof data.message.content === 'string'
@@ -538,7 +685,7 @@
    * No checkout call is made without an explicit button click (FR 14 / human-in-the-loop).
    */
   function confirmAndPay() {
-    if (!pendingProposedPurchase || !accessToken) return;
+    if (!pendingProposedPurchase || !hasMerchantCredential()) return;
 
     var purchase = pendingProposedPurchase;
     var confirmedAt = new Date().toISOString();
@@ -550,18 +697,23 @@
     fetch(CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messageHistory,
-        accessToken: accessToken,
-        confirmedAt: confirmedAt,
-        proposedPurchase: purchase,
-      }),
+      body: JSON.stringify(
+        Object.assign(
+          {
+            messages: messageHistory,
+            confirmedAt: confirmedAt,
+            proposedPurchase: purchase,
+          },
+          merchantCredentialFields(),
+        ),
+      ),
     })
       .then(function (res) {
         if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
         return res.json();
       })
       .then(function (data) {
+        cacheMerchantTokenFromResponse(data);
         var content =
           data && data.message && typeof data.message.content === 'string'
             ? data.message.content
@@ -637,12 +789,14 @@
     }, 0);
 
     // ── Textarea ──────────────────────────────────────────────────────────────
-    // Starts read-only; the readonly guard is lifted after `fetchAccessToken`
-    // confirms the user is signed in and returns a valid token.
+    // Starts read-only only on the very first open, while silent SSO is
+    // in-flight; the readonly guard is lifted once `attemptSilentSso` resolves
+    // (merchant token or guest fallback). On subsequent opens the SSO attempt
+    // has already resolved, so the textarea is immediately usable.
     var textarea = h('textarea', {
       rows: '2',
       placeholder: 'Type a message...',
-      readonly: !accessToken,
+      readonly: !hasMerchantCredential() && !ssoAttempted,
       'aria-label': 'Message ' + CHATBOT_NAME,
       style: inputStyle,
     });
@@ -736,10 +890,13 @@
 
     root.appendChild(panel);
 
-    // Fetch the access token when the panel opens (if not already available).
-    // A 401 response means the user is not signed in — textarea stays locked.
-    if (!accessToken) {
-      setTimeout(fetchAccessToken, 0);
+    // Attempt silent SSO on first open only. Called synchronously (not via
+    // setTimeout) so the popup opens within the same call stack as the click
+    // that opened the panel — most browsers only allow window.open without
+    // being treated as a popup-blocked call when it happens during a user
+    // gesture's own call stack.
+    if (!hasMerchantCredential() && !ssoAttempted) {
+      attemptSilentSso();
     }
 
     return root;

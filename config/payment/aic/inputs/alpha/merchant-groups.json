@@ -1,0 +1,7 @@
+[
+  {
+    "_id": "mrch-northwind",
+    "name": "mrch-northwind",
+    "condition": "custom_merchantId == \"northwind\""
+  }
+]

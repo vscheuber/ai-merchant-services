@@ -1,17 +1,23 @@
 // POST /api/chat — Acme Assist chatbot powered by OpenAI GPT-4.1-mini.
 //
-// Task 10 additions on top of the Task 8 LLM integration:
-//   1. Accepts `accessToken` (payment realm user token) in the request body.
-//   2. Step 2 token exchange: exchanges the payment token for a chatbot-agent
-//      agent token using `chatbot-agent` client credentials and the
+//   1. Accepts `merchantAuthCode` + `merchantCodeVerifier` + `merchantId` (the
+//      PKCE authorization code pair from the embed widget's own silent-SSO
+//      popup flow) in the request body.
+//   2. Step 1: exchanges that code for a merchant ID token server-to-server
+//      (no CORS setup needed on the merchant IDP), runs the
+//      `merchant-token-login` AM journey with it, then bridges the resulting
+//      AM session into a payment realm access token (`merchant-bridge.ts`).
+//      Owned entirely by this server — apps/merchant-web is never involved.
+//   3. Step 2 token exchange: exchanges the payment token for a northwind-chatbot-agent
+//      agent token using `northwind-chatbot-agent` client credentials and the
 //      `urn:ietf:params:oauth:grant-type:token-exchange` grant.
-//   3. Fetches shopper context (loyalty balance + wallet cards) from payment-api
+//   4. Fetches shopper context (loyalty balance + wallet cards) from payment-api
 //      using the agent token as Bearer.
-//   4. Enriches the system prompt with the shopper's loyalty tier, points, and
+//   5. Enriches the system prompt with the shopper's loyalty tier, points, and
 //      saved cards.
-//   5. Defines a `propose_purchase` OpenAI function tool. When the LLM calls
+//   6. Defines a `propose_purchase` OpenAI function tool. When the LLM calls
 //      this tool, the structured purchase data is returned in `proposedPurchase`.
-//   6. Checkout confirmation path: when `confirmedAt` + `proposedPurchase` are
+//   7. Checkout confirmation path: when `confirmedAt` + `proposedPurchase` are
 //      present in the request body, calls `POST /api/checkout` on the payment-api
 //      with `consent.source = "chatbot"` and returns the result as a chat message.
 //
@@ -35,6 +41,10 @@ import type {
 
 import { dataFilePath } from '../../../lib/data-paths';
 import { exchangeToken } from '../../../lib/token-exchange';
+import {
+  exchangeMerchantAuthCodeForIdToken,
+  exchangeMerchantTokenForPaymentToken,
+} from '../../../lib/merchant-bridge';
 
 const NORTHWIND_MERCHANT_ID = 'mrch_northwind';
 const DEFAULT_MODEL = 'gpt-4.1-mini';
@@ -72,9 +82,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 // ── Step 2 token exchange ────────────────────────────────────────────────────
 
 /**
- * Exchange an payment realm user token for a chatbot-agent agent token.
+ * Exchange an payment realm user token for a northwind-chatbot-agent agent token.
  *
- * Uses the `chatbot-agent` client credentials and the RFC 8693 token-exchange
+ * Uses the `northwind-chatbot-agent` client credentials and the RFC 8693 token-exchange
  * grant against the AIC payment realm token endpoint.
  *
  * Reads env vars: `AIC_ALPHA_TOKEN_ENDPOINT`, `CHATBOT_AGENT_CLIENT_ID`,
@@ -103,8 +113,18 @@ async function exchangeForAgentToken(
       grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
       subject_token: paymentToken,
       subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
-      requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
-      scope: 'openid profile email',
+      // `audience` identifies which Application's AI Agent privilege grant
+      // (Acting On Behalf Of: subject groups + permissions) this exchange
+      // invokes — required by AIC's privilege model, per
+      // https://docs.pingidentity.com/pingoneaic/identity-for-ai/ai-agent-identities-configure-on-behalf-of-authentication-flow.md.
+      // Must be the target Application's own OAuth2 client ID, not its
+      // display name. No `requested_token_type` — not part of that contract.
+      audience: 'payment-api',
+      // No `openid` — the resulting token is a machine-to-machine agent token
+      // for calling payment-api, not a resource-owner-facing OIDC token, so
+      // there's no userinfo/identity claim to request. Must stay a subset of
+      // whatever the northwind-chatbot-agent AI Agent privilege grants.
+      scope: 'profile email',
     },
     { tokenEndpoint, clientId, clientSecret },
   );
@@ -131,7 +151,7 @@ interface UserContext {
 /**
  * Fetch the shopper's loyalty balance and saved wallet cards from the payment-api.
  *
- * Uses the chatbot-agent token (from Step 2) as the Bearer credential so that
+ * Uses the northwind-chatbot-agent token (from Step 2) as the Bearer credential so that
  * the payment-api JWT middleware accepts the request.
  */
 async function fetchUserContext(agentToken: string, userId: string): Promise<UserContext> {
@@ -335,18 +355,69 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const chatRequest = body as ChatRequest;
   const incomingMessages = Array.from(chatRequest.messages ?? []);
-  const paymentToken = chatRequest.accessToken;
+  const merchantAuthCode = chatRequest.merchantAuthCode;
+  const merchantCodeVerifier = chatRequest.merchantCodeVerifier;
+  const merchantId = chatRequest.merchantId;
   const confirmedAt = chatRequest.confirmedAt;
   const incomingProposedPurchase = chatRequest.proposedPurchase;
   const traceEnabled = chatRequest.trace === true;
-  const traceRaw = chatRequest.traceRaw === true;
+  // Raw token traces are never caller-controlled. Keep the client opt-in as a
+  // second condition for operator demos, but require a server-side gate too.
+  const traceRaw =
+    chatRequest.traceRaw === true && process.env['AIC_ALLOW_RAW_TOKEN_TRACE'] === 'true';
   const traceStages: TokenTraceStage[] = [];
+
+  // ── Step 1: merchant token/code → payment token ──────────────────────────
+  //
+  // Best-effort, same degradation pattern as Step 2 below: a failure (no
+  // merchant session, unknown merchant, journey/bridge error) degrades to an
+  // unauthenticated guest prompt rather than an error response. Never
+  // involves apps/merchant-web — the token/code came from the widget's own
+  // silent-SSO popup against the merchant IDP.
+  //
+  // A cached `merchantToken` (from a prior turn's response, see below) is
+  // used directly. Otherwise, on the first turn after silent SSO, the
+  // widget only has a one-time-use PKCE auth code — exchange it for a
+  // merchant ID token here (server-to-server) and echo that token back in
+  // the response so the widget can cache it for subsequent turns instead of
+  // trying to reuse the (now consumed) code.
+
+  let paymentToken: string | null = null;
+  let merchantTokenOut: string | undefined;
+  if (merchantId) {
+    try {
+      let merchantToken = chatRequest.merchantToken;
+      if (!merchantToken && merchantAuthCode && merchantCodeVerifier) {
+        merchantToken = await exchangeMerchantAuthCodeForIdToken(
+          merchantAuthCode,
+          merchantCodeVerifier,
+          traceEnabled ? traceStages : undefined,
+          traceRaw,
+        );
+        merchantTokenOut = merchantToken;
+      }
+      if (merchantToken) {
+        paymentToken = await exchangeMerchantTokenForPaymentToken(
+          merchantToken,
+          merchantId,
+          traceEnabled ? traceStages : undefined,
+          traceRaw,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        '[chat] Step 1 merchant-token-login failed; continuing as guest.',
+        err instanceof Error ? err.message : err,
+      );
+      paymentToken = null;
+    }
+  }
 
   // ── Step 2 token exchange + user context ─────────────────────────────────
   //
   // When `paymentToken` is present:
   //   1. Decode the payment JWT to extract `sub` (userId).
-  //   2. Exchange the payment token for a chatbot-agent agent token (Step 2).
+  //   2. Exchange the payment token for a northwind-chatbot-agent agent token (Step 2).
   //   3. Fetch the shopper's loyalty balance + wallet cards from payment-api.
   //
   // All three steps are best-effort for the normal chat path — a failure in
@@ -370,7 +441,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       // Non-fatal: proceed without userId; context fetch will be skipped.
     }
 
-    // Step 2: exchange payment user token for chatbot-agent agent token.
+    // Step 2: exchange payment user token for northwind-chatbot-agent agent token.
     // This is best-effort for the normal chat path — a failure degrades to an
     // unauthenticated system prompt (no loyalty/wallet context) rather than an
     // error response, matching the in-code specification at lines 330-332.
@@ -388,7 +459,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           name: 'step-2-payment-to-agent',
           status: 'failed',
           message: err instanceof Error ? err.message.slice(0, 300) : 'Token exchange failed',
-        })
+        });
       }
       // Non-fatal on the normal chat path: clear agent token and continue with
       // an unauthenticated system prompt. Log the failure for operator visibility.
@@ -437,6 +508,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             "I couldn't complete the purchase because no saved payment card was found in your wallet. " +
             'Please add a card to your Acme Payments account and try again.',
         },
+        ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
       };
       return NextResponse.json(noCardMsg);
     }
@@ -455,7 +527,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       ],
     };
 
-    const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(/\/$/, '');
+    const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(
+      /\/$/,
+      '',
+    );
     let checkoutResultContent: string;
 
     try {
@@ -509,6 +584,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const checkoutResponse: ChatResponse = {
       message: { role: 'assistant', content: checkoutResultContent },
+      ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
     };
     return NextResponse.json(checkoutResponse);
   }
@@ -590,6 +666,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const response: ChatResponse = {
     message: responseMessage,
     ...(proposedPurchaseOut !== undefined ? { proposedPurchase: proposedPurchaseOut } : {}),
+    ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
     ...(traceEnabled
       ? {
           trace: {

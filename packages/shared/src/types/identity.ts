@@ -21,14 +21,16 @@ export interface MerchantIdentity {
   givenName: string;
   /** Surname (mirrors AIC's `sn`). */
   sn: string;
-  /** Merchant this account belongs to — merchant users are single-tenant. */
+  /** Merchant resource/UI identifier, such as `mrch_northwind`. */
   merchantId: string;
+  /** Canonical merchant registry identifier used by payment-provider scoping. */
+  merchantRegistryId?: string;
 }
 
 export interface PaymentIdentity {
-  /** Stable id — matches `payment-provider managed user._id`. */
+  /** IDM-generated UUID for the payment-provider managed user `_id`. */
   id: string;
-  /** Login/user name on the payment realm. */
+  /** IDM userName UUID, generated independently from the merchant subject. */
   userName: string;
   /** Primary email. */
   email: string;
@@ -36,6 +38,10 @@ export interface PaymentIdentity {
   givenName: string;
   /** Surname. */
   sn: string;
+  /** Canonical merchant registry identifier, such as `northwind`. */
+  merchantId: string;
+  /** Stable customer subject from the originating merchant IDP. */
+  merchantCustomerId: string;
   /**
    * Marker for observability: which realm's JIT flow provisioned this
    * payment identity. Left optional so hand-created records stay clean.
