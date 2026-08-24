@@ -54,35 +54,59 @@ The primary chat surface is the overlay embedded inside `merchant-web` (renders 
 
 ## Token flow
 
-The chatbot requires the shopper's identity to be bridged from the merchant's identity domain into the payment provider's identity domain. This bridge is a two-step RFC 8693 token exchange.
+The chatbot requires the shopper's identity to be bridged from the merchant's identity domain into the payment provider's identity domain. This bridge (Step 1) is owned entirely by `chatbot-agent` — `apps/merchant-web` is not involved. Step 2 is an RFC 8693 token exchange.
 
 ```
  Consumer browser
  ────────────────────────────────────────────────────────────────
 
- 1. Shopper logs in at merchant-web
+ 1. Shopper logs in at merchant-web (unrelated to the chatbot)
     Auth.js v5 OIDC → merchant IDP (bravo realm)
-    → bravo access_token stored in session cookie
+    → merchant-web's own session cookie + a bravo AM SSO cookie,
+      both set as a side effect of this login
 
- 2. embed.js (in browser) calls merchant-web /api/chatbot/token
-    → merchant-web verifies bravo JWT via JWKS
-    → JIT: creates managed/alpha_user in payment provider IDM if absent
-    → Step 1 RFC 8693 exchange: bravo token → alpha user token
-    → returns alpha access_token to embed.js
+ 2. embed.js silently signs the shopper into a payment-provider-owned,
+    additive public client (`merchant-bridge`, bravo realm) via a small
+    popup — prompt=none + PKCE, reusing the bravo AM SSO cookie from
+    step 1. Yields a one-time authorization code (never exchanged in
+    the browser — see below).
 
- 3. embed.js sends POST /api/chat to chatbot-agent
-    Authorization: Bearer <alpha user token>
+ 3. embed.js sends { messages, merchantAuthCode, merchantCodeVerifier,
+    merchantId } to chatbot-agent's POST /api/chat.
 
- 4. chatbot-agent performs Step 2 RFC 8693 exchange
+ 4. chatbot-agent (Step 1, server-to-server):
+    a. Exchanges the code for a bravo ID token directly against the
+       merchant IDP's token endpoint (no CORS setup needed there).
+    b. Runs the `merchant-token-login` AM journey (alpha realm) with
+       that ID token: validates it against the target merchant's
+       `alpha_organization.merchantTrustedIssuerConfig`, then
+       JIT-looks-up/creates the corresponding `alpha_user`. Returns an
+       AM session, not yet an OAuth token.
+    c. Bridges that AM session into a real alpha access_token via the
+       `payment-bridge` confidential client (csrf/decision=allow
+       session→token bridge pattern).
+    chatbot-agent echoes the merchant ID token back to embed.js
+    (`ChatResponse.merchantToken`) so later turns skip a-c and send
+    the cached token directly — the authorization code is single-use.
+
+ 5. chatbot-agent performs Step 2 RFC 8693 exchange
     alpha user token → northwind-chatbot-agent token
-    (client_credentials + token-exchange using CHATBOT_AGENT_CLIENT_ID/SECRET)
+    (token-exchange grant, audience=payment-api — required by AIC's
+    AI Agent "Acting On Behalf Of" privilege model — using
+    CHATBOT_AGENT_CLIENT_ID/SECRET)
 
- 5. chatbot-agent calls payment-api
+ 6. chatbot-agent calls payment-api
     Authorization: Bearer <chatbot-agent token>
 
- 6. payment-api validates JWT
-    JWKS URI: PAYMENT_OIDC_JWKS_URI (payment provider IDP public keys)
+ 7. payment-api validates the token via RFC 7662 introspection
+    (PAYMENT_OIDC_INTROSPECTION_URL) — not local JWKS verification: the
+    alpha realm issues symmetric (HS256) stateless access tokens, whose
+    key is never published via JWKS. payment-api's own client needs the
+    am-introspect-all-tokens scope to introspect a token issued to a
+    different client (northwind-chatbot-agent).
 ```
+
+`apps/merchant-web`'s own account/products/checkout pages have a separate, unrelated token bridge (`src/lib/alpha-token.ts`, RFC 8693 exchange using the `payment-api` client and the bravo realm's trusted-JWT-issuer registration) for calling payment-api directly on the shopper's behalf — this has nothing to do with the chatbot.
 
 See [identity.md](./identity.md) for a detailed explanation of each IDP, the token exchange mechanism, and JIT provisioning.
 

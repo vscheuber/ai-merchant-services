@@ -259,6 +259,22 @@ Token exchange independently closes this path: AIC documents that exchanged toke
 
 No issuer, script, schema, user, or token mutation was performed. The proposed lookup should remain a hypothesis/diagnostic test until the exact Next Generation issuer binding and a supported claim-to-resource-owner mechanism are confirmed.
 
+## Task 9 — RESOLVED: journey-based merchant-subject mapping
+
+The Task 7/8 blocker is superseded, not fixed within the trusted-issuer/token-exchange surface those tasks investigated. A different, correct design — built and live-tested outside this document's investigation — resolves the underlying problem entirely inside AM/IDM:
+
+- A journey (in `/alpha`, to be provisioned as `merchant-token-login`) validates the merchant OIDC ID token per-merchant, using a **`ConfigProviderNode`** whose script reads per-merchant trust configuration (`merchantTrustedIssuerConfig`) from a new custom attribute on a **managed `Organization`** object (`alpha_organization`), keyed by another custom attribute (`merchantId`). This config is fed into a wrapped **`OidcNode`** ("OIDC ID Token Validator") to validate the token dynamically, per request — there is no single static `OAuth2TrustedJwtIssuer` to configure at all for this flow.
+- A transformation script (context `OIDC_NODE`) maps the validated token's claims to profile attributes, notably `sub → custom_merchantCustomerId`.
+- `IdentifyExistingUserNode`/`CreateObjectNode`/`PatchObjectNode` (against `managed/alpha_user`) resolve or JIT-create the payment identity by `custom_merchantCustomerId`, entirely inside AM — the payment `_id`/`userName` remain IDM-generated, exactly per the Task 6 runtime contract above; the merchant subject never becomes the managed-object path or `_id`.
+
+Task 7/8's specific finding — "no supported mapping from an external subject to a generated `alpha_user` UUID exists in the trusted-issuer/token-exchange surface" — is **not contradicted**. The resolution works by not using that surface at all.
+
+**Resellability**: onboarding a new merchant is "add one `Organization` record describing their issuer" plus registering one new OIDC client in their realm for silent SSO — no new journey, no payment-provider code change, no per-merchant AM/IDM configuration beyond that record. See the cross-project tracker (`/Users/volker.scheuber/Documents/Projects/frodos/frodo-tracker.md`, Section 9) for the full node-by-node trace, confirmed journey clone/rename mechanics (`frodo journey export`/`import`, `--re-uuid` semantics, script-reference preservation), and the confirmed AM-session→OAuth-token bridging pattern used downstream.
+
+**Schema note**: `custom_merchantId`/`custom_merchantCustomerId` — flagged as blocked pending an authoritative write contract in Task 6 above — are now live on the `alpha_user` schema (`type: string`, `searchable: false`). The exact write mechanism used was not captured by this document; the schema-write contract questions in "Open schema questions" below remain open in the abstract even though this specific instance succeeded.
+
+**MCP tool bug found this session**: `oauth2oidc.client.*` Frodo MCP skills silently ignore the `realm` parameter and always execute against `/alpha`, regardless of the realm requested — confirmed via identical request URLs for both `/alpha`- and `/bravo`-targeted calls; the tool's own `metadata.scope.appliedRealm` field echoed the requested realm without reflecting the actual (wrong) realm hit. `authn.journey.*`, `authn.node.*`, and `idm.managed.*` skills correctly honored realm switching. Any earlier finding — in this document or elsewhere — describing live `/bravo` OAuth2-client state should be treated as unverified unless it was cross-checked via the Frodo CLI directly (`frodo oauth client list --long <host> bravo`).
+
 ## Recommended improvements
 
 Prioritize the following improvements before expanding live provisioning:
@@ -276,4 +292,4 @@ Prioritize the following improvements before expanding live provisioning:
 
 ## Phase status
 
-The application and Northwind OAuth2/AI Agent desired-state work is present, but the live first-class AI Agent create rejection remains unresolved and custom payment-provider user schema work remains blocked pending an authoritative write contract. These are known Frodo/tenant integration gaps, not reasons to weaken the identity or merchant authorization boundary.
+The application and Northwind OAuth2/AI Agent desired-state work is present. The custom payment-provider user schema attributes are now live (see Task 9). The merchant-subject-to-payment-UUID mapping blocker is resolved via the journey-based design in Task 9, pending: cloning `poc-jwt-login` to a production name, adding provisioner support for journeys/organizations/the two new bridging OAuth2 clients, and moving the runtime Step 1 flow into `apps/chatbot-agent`. These are tracked as in-progress implementation work, not open blockers.

@@ -1,7 +1,9 @@
 // Server-side utility: exchange a merchant realm access_token for an payment realm access_token.
 //
-// Encapsulates the full Step 1 flow used by both the `/api/chatbot/token` route
-// and the merchant-web server pages that need to call the payment-api:
+// Used by merchant-web's own server pages (account, products, checkout) that
+// call payment-api directly — not by the chatbot widget, which now runs its
+// own separate Step 1 (silent SSO + merchant-token-login journey) entirely
+// inside chatbot-agent; see docs/identity.md.
 //   1. Verify and decode the merchant JWT using the merchant realm JWKS.
 //   2. Obtain a service-account payment token for AIC IDM operations.
 //   3. JIT-provision an payment_user if one does not yet exist.

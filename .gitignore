@@ -45,3 +45,6 @@ Thumbs.db
 .playwright-mcp/
 .claude/
 .pnpm-store/
+
+# Local Caddy TLS/PKI data dir (used to work around a root-owned default cert store)
+.caddy-data/

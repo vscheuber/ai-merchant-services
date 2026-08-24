@@ -81,9 +81,12 @@ Resources are declared in realm-specific JSON directories: payment-provider reso
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | OAuth2Client           | `payment-api`, `payment-user-web`, `payment-admin-web`                                                                         |
 | OAuth2Client           | `chatbot-agent` (legacy client retained; Northwind replacement is opt-in)                                                      |
+| OAuth2Client           | `payment-bridge` — confidential, `authorization_code` grant; used only server-side by `chatbot-agent`'s Step 1 session→token bridge |
 | AIAgent                | `northwind-chatbot-agent` (desired identity; migration deletes only its OAuth2 client)                                         |
 | Application            | `payment-api`, `payment-user-web`, `payment-admin-web` — payment-provider applications linked to the matching OAuth2 clients   |
-| OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer for Step 1 token exchange                                   |
+| OAuth2TrustedJwtIssuer | `bravo-realm` — registers the merchant IDP as a trusted JWT issuer, used by `merchant-web`'s own `alpha-token.ts` (account/products/checkout pages, unrelated to the chatbot). The chatbot's own Step 1 (`merchant-token-login` journey) validates issuers dynamically per merchant instead, not via this tenant-wide registration |
+| Organization           | `northwind` (`alpha_organization`, keyed by the custom `merchantId` attribute) — one record per onboarded merchant, carrying that merchant's `merchantTrustedIssuerConfig` read dynamically by the journey below |
+| Journey                | `merchant-token-login` — validates a merchant ID token against the target merchant's `Organization` record and JIT-provisions/updates the corresponding `alpha_user`; see [identity.md](./identity.md) |
 | MerchantGroup (opt-in) | `mrch-northwind` — dynamic group for `custom_merchantId == "northwind"`; desired state is gated until the custom schema exists |
 
 **Merchant IDP (bravo realm):**
@@ -91,6 +94,7 @@ Resources are declared in realm-specific JSON directories: payment-provider reso
 | Resource type                  | IDs                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------ |
 | OAuth2Client                   | `merchant-web`                                                                       |
+| OAuth2Client                   | `merchant-bridge` — public, `authorization_code` + PKCE; the additive, payment-provider-owned client the chatbot widget uses for silent SSO. Never touches `merchant-web`'s own client/config. |
 | Application                    | `merchant-web`                                                                       |
 | BravoUser (managed/bravo_user) | Three demo shoppers from `data/users.json` (Ada Lovelace, Grace Hopper, Alan Turing) |
 
@@ -109,6 +113,24 @@ pnpm --filter @acme/aic-config provision -- --replace-northwind-chatbot-client
 ```
 
 Live migration behavior is narrowly gated. The original destructive attempt deleted the target OAuth2 client, then AIC returned HTTP 500 `AI Agent: Failed to create agent identity.` The retry path therefore performs no deletion: it requires an explicit flag, confirms both the target OAuth2 client and AI Agent are 404, and creates from the non-secret desired agent configuration. The create payload includes both flattened `aiAgentIdentityAttributes` and Frodo's nested `_aiAgentIdentity` with an empty `_privileges` array; no identity UUID is generated. The create response identity `_id` is authoritative when present. With Frodo 4.1.7, whose create response may omit it, the provisioner performs one immediate identity-inclusive read as the documented fallback and then validates the returned identity ID. Any missing or mismatched identity stops the phase without further mutation. The legacy `chatbot-agent` client remains untouched, and secrets are never printed.
+
+### Journey and organization provisioning
+
+Unlike the Northwind chatbot migration, `Organization` and `Journey` desired state is upserted unconditionally on every run — plain `frodo journey import` (no `--re-uuid`) is Frodo's own idempotent, PUT-by-ID mechanism, safe to run repeatedly:
+
+```bash
+pnpm --filter @acme/aic-config provision -- --dry-run   # shows Organization[northwind], Journey[merchant-token-login]
+pnpm --filter @acme/aic-config provision                # upserts both, along with everything else
+```
+
+`merchant-token-login` was cloned from an earlier proof-of-concept journey named `poc-jwt-login` (fresh node/inner-node UUIDs via one-time `--re-uuid`, never repeated) and verified live before being adopted as desired state. The old journey is retired via a separate, explicitly opt-in one-time flag — dormant by default, and only meant to run after the new journey has been verified end-to-end in production use:
+
+```bash
+pnpm --filter @acme/aic-config provision -- --dry-run --migrate-merchant-token-login-journey
+pnpm --filter @acme/aic-config provision -- --migrate-merchant-token-login-journey
+```
+
+This performs a deep delete of `poc-jwt-login` (its own now-orphaned nodes/inner-nodes; shared scripts like the default Config Provider script are untouched) with a 404 read-back verification. It does not run as part of a normal `provision` invocation.
 
 ### Merchant group provisioning (schema-gated)
 
@@ -139,13 +161,17 @@ Output:
   dry-run  OAuth2Client               [/alpha] payment-admin-web
   dry-run  OAuth2Client               [/alpha] payment-api
   dry-run  OAuth2Client               [/alpha] chatbot-agent
+  dry-run  OAuth2Client               [/alpha] payment-bridge
   planned  OAuth2Client               [/alpha] northwind-chatbot-agent
   planned  AIAgent                    [/alpha] northwind-chatbot-agent
   dry-run  Application                [/alpha] payment-api
   dry-run  Application                [/alpha] payment-user-web
   dry-run  Application                [/alpha] payment-admin-web
   dry-run  OAuth2TrustedJwtIssuer     [/alpha] bravo-realm
+  dry-run  Organization               [/alpha] northwind
+  dry-run  Journey                    [/alpha] merchant-token-login
   dry-run  OAuth2Client               [/bravo] merchant-web
+  dry-run  OAuth2Client               [/bravo] merchant-bridge
   dry-run  Application                [/bravo] merchant-web
   dry-run  BravoUser                  [/bravo] <user-id-1>
   dry-run  BravoUser                  [/bravo] <user-id-2>

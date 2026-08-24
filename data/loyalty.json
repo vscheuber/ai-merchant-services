@@ -7,6 +7,13 @@
     "tier": "gold"
   },
   {
+    "userId": "a22944a9-dac7-4618-84d3-abaaa11a970c",
+    "merchantId": "mrch_northwind",
+    "points": 2500,
+    "lifetimePoints": 3626,
+    "tier": "gold"
+  },
+  {
     "userId": "user_ada",
     "merchantId": "mrch_contoso",
     "points": 120,

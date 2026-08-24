@@ -72,12 +72,15 @@ All merchant users authenticate against the **bravo realm** (merchant IDP) at `i
 
 ---
 
-### Step 3 — Chatbot token exchange (bravo → alpha)
+### Step 3 — Chatbot bridge (bravo → alpha)
 
-When Ada sends her first message, the chatbot performs a two-step token exchange in the background:
+When the widget opens, and again when Ada sends her first message, the chatbot bridges her identity across realms in the background — entirely without involving `merchant-web`:
 
-- **Step 1** (`merchant-web /api/chatbot/token`): exchanges Ada's bravo session token for an alpha realm token using the `payment-api` client credentials (`urn:ietf:params:oauth:grant-type:token-exchange`).
-- **Step 2** (`chatbot-agent /api/chat`): exchanges the alpha token for a `northwind-chatbot-agent`-scoped token before forwarding the chat to the OpenAI API and calling back into `payment-api` for contextual data.
+- **Step 1, browser** (`embed.js`): silently reuses Ada's existing bravo SSO cookie to sign into the additive `merchant-bridge` public client (`prompt=none` + PKCE via a small popup), yielding a merchant ID token with zero visible UI.
+- **Step 1, backend** (`chatbot-agent /api/chat`, via `src/lib/merchant-bridge.ts`): runs the `merchant-token-login` AM journey with that ID token, then bridges the resulting AM session into a real alpha access token via the `payment-bridge` confidential client.
+- **Step 2** (`chatbot-agent /api/chat`): exchanges the alpha token for a `northwind-chatbot-agent`-scoped token before forwarding the chat to the OpenAI API and calling back into `payment-api` for contextual data. Unchanged from before.
+
+See [identity.md](./identity.md) for the full protocol detail, including the silent-SSO-vs-token-exchange tradeoff.
 
 ---
 

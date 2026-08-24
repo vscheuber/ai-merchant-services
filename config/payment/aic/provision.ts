@@ -10,6 +10,7 @@ import type {
   AIAgentIdentityAttributes,
   ApplicationPayload,
   TrustedJwtIssuerPayload,
+  OrganizationPayload,
   BravoUser,
   MerchantGroupConfig,
   MerchantGroupPayload,
@@ -58,6 +59,29 @@ function loadAlphaApplications(): ApplicationPayload[] {
 
 function loadAlphaTrustedJwtIssuers(): TrustedJwtIssuerPayload[] {
   return loadRealmJson<TrustedJwtIssuerPayload[]>('alpha', 'trusted-jwt-issuers.json');
+}
+
+function loadAlphaOrganizations(): OrganizationPayload[] {
+  return loadRealmJson<OrganizationPayload[]>('alpha', 'organizations.json');
+}
+
+/**
+ * The checked-in file is a Frodo MultiTreeExportInterface (`{meta, trees}`),
+ * produced by `frodo journey export`. Each journey we deploy lives in its own
+ * file, keyed by its own journey ID inside `trees`.
+ */
+function loadAlphaJourneyBundle(journeyId: string): Record<string, unknown> {
+  const bundle = loadRealmJson<{ trees?: Record<string, unknown> }>(
+    'alpha',
+    `journeys/${journeyId}.journey.json`,
+  );
+  const tree = bundle.trees?.[journeyId];
+  if (!tree) {
+    throw new Error(
+      `Journey bundle 'journeys/${journeyId}.journey.json' does not contain a '${journeyId}' tree.`,
+    );
+  }
+  return tree as Record<string, unknown>;
 }
 
 function loadMerchantGroupConfig(): MerchantGroupConfig {
@@ -245,6 +269,139 @@ async function upsertTrustedJwtIssuer(
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[${realm}] OAuth2TrustedJwtIssuer skipped (${issuerId}): ${msg}`);
     return { action: 'skipped', resourceType, realm, id: issuerId, error: msg };
+  }
+}
+
+async function upsertOrganization(
+  desired: OrganizationPayload,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'Organization';
+  const id = desired.merchantId;
+  const detail = `merchantId=${desired.merchantId}`;
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id, detail };
+  }
+  try {
+    const orgType = instance.idm.organization.getRealmManagedOrganization();
+    const existing = await instance.idm.managed.queryManagedObjects(
+      orgType,
+      `merchantId eq "${desired.merchantId}"`,
+      ['_id', 'merchantId'],
+    );
+    if (existing.length === 0) {
+      await instance.idm.managed.createManagedObject(
+        orgType,
+        desired as unknown as Parameters<typeof instance.idm.managed.createManagedObject>[1],
+      );
+      console.log(`[${realm}] Organization created: ${id} (${detail})`);
+      return { action: 'created', resourceType, realm, id, detail };
+    }
+    const existingUuid = existing[0]!['_id'] as string;
+    const live = (await instance.idm.managed.readManagedObject(orgType, existingUuid)) as Record<
+      string,
+      unknown
+    >;
+    const flat = flattenWrapped(live) as Record<string, unknown>;
+    const merged = deepMerge(flat, desired as Record<string, unknown>);
+    await instance.idm.managed.updateManagedObject(
+      orgType,
+      existingUuid,
+      merged as Parameters<typeof instance.idm.managed.updateManagedObject>[2],
+    );
+    console.log(`[${realm}] Organization updated: ${id} (${detail})`);
+    return { action: 'updated', resourceType, realm, id, detail };
+  } catch (error) {
+    const msg = formatFrodoError(error);
+    console.error(`[${realm}] Organization skipped (${id}): ${msg}`);
+    return { action: 'skipped', resourceType, realm, id, detail, error: msg };
+  }
+}
+
+/**
+ * Journey import (without `--re-uuid`) is Frodo's own idempotent, PUT-by-ID
+ * desired-state mechanism, so this always calls `importJourney` rather than
+ * hand-rolling a node/script diff. The tree's own `_id` inside
+ * `singleTreeExport.tree` — not the `journeyId` argument — is what Frodo
+ * actually writes to; `journeyId` here is only used for the pre-check and
+ * read-back verification, so the checked-in bundle's `tree._id` must match.
+ */
+async function upsertJourney(
+  journeyId: string,
+  singleTreeExport: Record<string, unknown>,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'Journey';
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id: journeyId };
+  }
+  try {
+    let action: 'created' | 'updated' = 'created';
+    try {
+      await instance.authn.journey.readJourney(journeyId);
+      action = 'updated';
+    } catch (error) {
+      if (!hasHttpStatus(error, 404)) throw error;
+    }
+    await instance.authn.journey.importJourney(
+      singleTreeExport as unknown as Parameters<typeof instance.authn.journey.importJourney>[0],
+      { reUuid: false, deps: true },
+    );
+    const readBack = (await instance.authn.journey.readJourney(journeyId)) as unknown as Record<
+      string,
+      unknown
+    >;
+    if (!readBack || readBack['_id'] !== journeyId) {
+      throw new Error(`Journey read-back mismatch for '${journeyId}'`);
+    }
+    console.log(`[${realm}] Journey ${action}: ${journeyId}`);
+    return { action, resourceType, realm, id: journeyId };
+  } catch (error) {
+    const msg = formatFrodoError(error);
+    console.error(`[${realm}] Journey failed (${journeyId}): ${msg}`);
+    throw new Error(`Journey upsert failed for '${journeyId}': ${msg}`, { cause: error });
+  }
+}
+
+/**
+ * Deletes the deprecated `poc-jwt-login` journey (deep delete cascades to its
+ * own now-orphaned nodes/inner-nodes only — shared scripts, e.g. the default
+ * Config Provider script, are untouched). Deliberately NOT wired into the
+ * steady-state `provision()` flow: invoke only once, explicitly, after
+ * `merchant-token-login` has been verified end-to-end (task #36's gate).
+ */
+async function retirePocJwtLoginJourney(
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord> {
+  const resourceType: ResourceType = 'Journey';
+  const id = 'poc-jwt-login';
+  if (dryRun) {
+    return { action: 'dry-run', resourceType, realm, id, operation: 'delete' };
+  }
+  try {
+    await instance.authn.journey.deleteJourney(id, { deep: true, verbose: false });
+    try {
+      await instance.authn.journey.readJourney(id);
+      throw new Error(`Journey '${id}' still exists after deep delete`);
+    } catch (readError) {
+      if (!hasHttpStatus(readError, 404)) throw readError;
+    }
+    console.log(`[${realm}] Journey deleted: ${id}`);
+    return { action: 'deleted', resourceType, realm, id, operation: 'delete' };
+  } catch (error) {
+    if (hasHttpStatus(error, 404)) {
+      console.log(`[${realm}] Journey already absent: ${id}`);
+      return { action: 'skipped', resourceType, realm, id, operation: 'delete', error: 'already absent (404)' };
+    }
+    const msg = formatFrodoError(error);
+    console.error(`[${realm}] Journey delete failed (${id}): ${msg}`);
+    throw new Error(`Journey delete failed for '${id}': ${msg}`, { cause: error });
   }
 }
 
@@ -922,12 +1079,15 @@ async function pruneStaleAlphaApplications(
 // Main provision function
 // ---------------------------------------------------------------------------
 
+const MERCHANT_TOKEN_LOGIN_JOURNEY_ID = 'merchant-token-login';
+
 export async function provision(
   config: TenantConfig,
   dryRun: boolean,
   pruneStaleApplications = false,
   replaceNorthwindChatbotClientOptIn = false,
   provisionMerchantGroups = false,
+  retirePocJwtLoginJourneyOptIn = false,
 ): Promise<RunSummary> {
   const { tenantUrl } = config;
 
@@ -955,6 +1115,8 @@ export async function provision(
   const alphaClients = loadAlphaOAuth2Clients();
   const alphaApplications = loadAlphaApplications();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
+  const alphaOrganizations = loadAlphaOrganizations();
+  const merchantTokenLoginJourney = loadAlphaJourneyBundle(MERCHANT_TOKEN_LOGIN_JOURNEY_ID);
   const merchantGroupConfig = loadMerchantGroupConfig();
   const alphaMerchantGroups = loadAlphaMerchantGroups();
   validateMerchantGroupDesiredState(merchantGroupConfig, alphaMerchantGroups);
@@ -1037,6 +1199,31 @@ export async function provision(
       actions.push(await upsertTrustedJwtIssuer(id, issuer, alphaInstance, '/alpha', dryRun));
     }
 
+    // Alpha Organizations — one per onboarded merchant.
+    for (const organization of alphaOrganizations) {
+      actions.push(await upsertOrganization(organization, alphaInstance, '/alpha', dryRun));
+    }
+
+    // Alpha Journeys. Plain import (no --re-uuid) is idempotent desired-state
+    // reconciliation, safe to run on every provision — distinct from the
+    // one-time clone/retire migration gated below.
+    actions.push(
+      await upsertJourney(
+        MERCHANT_TOKEN_LOGIN_JOURNEY_ID,
+        merchantTokenLoginJourney,
+        alphaInstance,
+        '/alpha',
+        dryRun,
+      ),
+    );
+
+    // One-time retirement of the pre-rename poc-jwt-login journey. Dormant by
+    // default; only run after merchant-token-login has been verified
+    // end-to-end in production use.
+    if (retirePocJwtLoginJourneyOptIn) {
+      actions.push(await retirePocJwtLoginJourney(alphaInstance, '/alpha', dryRun));
+    }
+
     if (provisionMerchantGroups) {
       const schemaApproved = process.env['AIC_MERCHANT_SCHEMA_APPROVED'] === 'true';
       for (const group of alphaMerchantGroups) {
@@ -1115,6 +1302,9 @@ export const main = async (): Promise<void> => {
   const pruneStaleApplications = process.argv.includes('--prune-stale-applications');
   const replaceNorthwindChatbotClient = process.argv.includes('--replace-northwind-chatbot-client');
   const provisionMerchantGroups = process.argv.includes('--provision-merchant-groups');
+  const retirePocJwtLoginJourneyOptIn = process.argv.includes(
+    '--migrate-merchant-token-login-journey',
+  );
   const config = loadConfig();
   await provision(
     config,
@@ -1122,6 +1312,7 @@ export const main = async (): Promise<void> => {
     pruneStaleApplications,
     replaceNorthwindChatbotClient,
     provisionMerchantGroups,
+    retirePocJwtLoginJourneyOptIn,
   );
 };
 

@@ -43,7 +43,7 @@
       "clientType": "Confidential",
       "status": "Active",
       "clientName": ["Acme Payments — API"],
-      "scopes": ["openid", "profile", "email", "fr:idm:*"],
+      "scopes": ["openid", "profile", "email", "fr:idm:*", "am-introspect-all-tokens"],
       "redirectionUris": [],
       "refreshTokenLifetime": 604800,
       "accessTokenLifetime": 3600,
@@ -71,6 +71,25 @@
     "advancedOAuth2ClientConfig": {
       "grantTypes": ["authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"],
       "isConsentImplied": false,
+      "responseTypes": ["code"],
+      "tokenEndpointAuthMethod": "client_secret_post"
+    }
+  },
+  {
+    "_id": "payment-bridge",
+    "coreOAuth2ClientConfig": {
+      "clientType": "Confidential",
+      "status": "Active",
+      "clientName": ["Acme Payments — Session Bridge"],
+      "scopes": ["openid", "profile", "email"],
+      "redirectionUris": ["https://chatbot-agent.internal/callback/alpha-session-exchange"],
+      "refreshTokenLifetime": 604800,
+      "accessTokenLifetime": 3600,
+      "authorizationCodeLifetime": 120
+    },
+    "advancedOAuth2ClientConfig": {
+      "grantTypes": ["authorization_code"],
+      "isConsentImplied": true,
       "responseTypes": ["code"],
       "tokenEndpointAuthMethod": "client_secret_post"
     }

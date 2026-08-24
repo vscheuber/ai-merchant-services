@@ -71,6 +71,29 @@ export interface TrustedJwtIssuerPayload {
   [key: string]: unknown;
 }
 
+/**
+ * Desired state for a payment-provider IDM Organization managed object.
+ * Keyed by the custom `merchantId` attribute (not the IDM-generated `_id`) —
+ * onboarding a new merchant is adding one of these, nothing else. The
+ * `merchantTrustedIssuerConfig` shape mirrors the OIDC ID Token Validator
+ * node's own configuration properties, read dynamically per merchant by the
+ * `merchant-token-login` journey's ConfigProviderNode.
+ */
+export interface OrganizationPayload {
+  merchantId: string;
+  name: string;
+  merchantTrustedIssuerConfig: {
+    oidcValidationType: string;
+    oidcValidationValue: string;
+    idTokenIssuer: string;
+    audienceName: string;
+    authorisedParties: string[];
+    unreasonableLifetimeLimit: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 /** Stable, tenant-wide settings for payment-provider merchant scoping. */
 export interface MerchantGroupPrefixConfig {
   groupPrefix: string;
@@ -143,7 +166,9 @@ export type ResourceType =
   | 'Application'
   | 'BravoUser'
   | 'MerchantGroup'
-  | 'StaleApplication';
+  | 'StaleApplication'
+  | 'Organization'
+  | 'Journey';
 
 export interface ActionRecord {
   action: ActionType;

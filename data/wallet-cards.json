@@ -27,6 +27,33 @@
     "cardholderName": "Ada Lovelace"
   },
   {
+    "id": "card_ada_jit_001",
+    "userId": "a22944a9-dac7-4618-84d3-abaaa11a970c",
+    "brand": "visa",
+    "last4": "4242",
+    "expiryMonth": 5,
+    "expiryYear": 2029,
+    "cardholderName": "Ada Lovelace"
+  },
+  {
+    "id": "card_ada_jit_002",
+    "userId": "a22944a9-dac7-4618-84d3-abaaa11a970c",
+    "brand": "mastercard",
+    "last4": "5454",
+    "expiryMonth": 11,
+    "expiryYear": 2028,
+    "cardholderName": "Ada Lovelace"
+  },
+  {
+    "id": "card_ada_jit_003",
+    "userId": "a22944a9-dac7-4618-84d3-abaaa11a970c",
+    "brand": "amex",
+    "last4": "0005",
+    "expiryMonth": 3,
+    "expiryYear": 2030,
+    "cardholderName": "Ada Lovelace"
+  },
+  {
     "id": "card_grace_001",
     "userId": "user_grace",
     "brand": "visa",
