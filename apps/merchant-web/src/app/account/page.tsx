@@ -13,27 +13,13 @@
 // Next.js App Router requires a default export.
 
 import { redirect } from 'next/navigation'
-import type { LoyaltyBalance, Merchant, WalletCard } from '@acme/shared'
-import { AppShell, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@acme/ui'
+import type { LoyaltyBalance, WalletCard } from '@acme/shared'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@acme/ui'
 import { auth } from '../../auth'
 import { getPaymentToken } from '../../lib/alpha-token'
 import { MerchantHeaderActions } from '../../components/merchant-header-actions'
-
-const nav = [
-  { label: 'Products', href: '/products' },
-  { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
-  { label: 'Account', href: '/account' },
-] as const
-
-const merchant: Merchant = {
-  id: 'mrch_northwind',
-  name: 'Northwind Retail',
-  brand: 'Northwind Retail',
-  domains: ['northwind.local'],
-  primaryColor: '#1f6feb',
-  logoUrl: '/brand/northwind.svg',
-}
+import { StorefrontShell } from '../../components/storefront-shell'
+import { loadMerchantConfig } from '../../lib/merchant-config'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,6 +38,7 @@ function brandLabel(brand: WalletCard['brand']): string {
 
 export default async function AccountPage() {
   const session = await auth()
+  const merchantConfig = await loadMerchantConfig()
 
   // Account data is private: require an authenticated merchant session.
   if (!session?.accessToken) {
@@ -68,7 +55,12 @@ export default async function AccountPage() {
   // page degrades gracefully with "unavailable" fallbacks.
   let token = ''
   try {
-    token = await getPaymentToken(session.accessToken ?? '', session.user)
+    token = await getPaymentToken(session.accessToken ?? '', session.user, {
+      enabled: true,
+      rawTokens: false,
+      traceSessionId: session.traceSessionId,
+      onTrace: () => undefined,
+    }, merchantConfig.merchantId)
   } catch {
     // Non-blocking — graceful fallbacks are rendered below.
   }
@@ -77,7 +69,7 @@ export default async function AccountPage() {
   let loyalty: LoyaltyBalance | null = null
   try {
     const res = await fetch(
-      `${baseUrl}/api/loyalty?userId=${encodeURIComponent(userId)}&merchantId=${encodeURIComponent(merchant.id)}`,
+      `${baseUrl}/api/loyalty?userId=${encodeURIComponent(userId)}&merchantId=${encodeURIComponent(merchantConfig.merchantId)}`,
       { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },
     )
     if (res.ok) {
@@ -103,12 +95,12 @@ export default async function AccountPage() {
   }
 
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<MerchantHeaderActions />}>
+    <StorefrontShell actions={<MerchantHeaderActions />}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Account</p>
         <h1 className="text-3xl font-semibold tracking-tight">My Account</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Manage your profile, loyalty points, and saved payment methods for Northwind Retail.
+          Manage your profile, loyalty points, and saved payment methods for {merchantConfig.brand}.
         </p>
       </section>
 
@@ -124,11 +116,11 @@ export default async function AccountPage() {
               <span className="font-medium text-foreground">Signed in as:</span> {userName}
             </p>
             <p>
-              <span className="font-medium text-foreground">Merchant:</span> {merchant.name}
+              <span className="font-medium text-foreground">Merchant:</span> {merchantConfig.brand}
             </p>
             <p>
               <span className="font-medium text-foreground">Domain:</span>{' '}
-              {merchant.domains[0] ?? '—'}
+              {merchantConfig.merchantId}
             </p>
           </CardContent>
         </Card>
@@ -137,7 +129,7 @@ export default async function AccountPage() {
         <Card>
           <CardHeader>
             <CardTitle>Loyalty</CardTitle>
-            <CardDescription>Points balance for {merchant.name}.</CardDescription>
+            <CardDescription>Points balance for {merchantConfig.brand}.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1 text-sm text-muted-foreground">
             {loyalty == null ? (
@@ -166,7 +158,7 @@ export default async function AccountPage() {
           <CardHeader>
             <CardTitle>Saved cards</CardTitle>
             <CardDescription>
-              Cards on file for Northwind Retail. Full card numbers are never stored.
+              Cards on file for {merchantConfig.brand}. Full card numbers are never stored.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -190,6 +182,6 @@ export default async function AccountPage() {
           </CardContent>
         </Card>
       </section>
-    </AppShell>
+    </StorefrontShell>
   )
 }

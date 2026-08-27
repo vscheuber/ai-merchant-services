@@ -2,7 +2,7 @@
   {
     "id": "prod_nw_lp_001",
     "sku": "NW-LP-14-SILVER",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Aero 14",
     "category": "laptops",
     "price": 1299.0,
@@ -14,7 +14,7 @@
   {
     "id": "prod_nw_lp_002",
     "sku": "NW-LP-16-PRO",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Aero 16 Pro",
     "category": "laptops",
     "price": 1899.0,
@@ -28,7 +28,7 @@
   {
     "id": "prod_co_lp_001",
     "sku": "CG-LP-13-AIR",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Slate 13 Air",
     "category": "laptops",
     "price": 999.0,
@@ -40,7 +40,7 @@
   {
     "id": "prod_nw_ph_001",
     "sku": "NW-PH-X7",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Pulse X7",
     "category": "phones",
     "price": 799.0,
@@ -54,7 +54,7 @@
   {
     "id": "prod_nw_ph_002",
     "sku": "NW-PH-X7-MINI",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Pulse X7 Mini",
     "category": "phones",
     "price": 649.0,
@@ -66,7 +66,7 @@
   {
     "id": "prod_co_ph_001",
     "sku": "CG-PH-VOLT",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Volt",
     "category": "phones",
     "price": 549.0,
@@ -78,7 +78,7 @@
   {
     "id": "prod_nw_hp_001",
     "sku": "NW-HP-STUDIO",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Studio Over-Ear",
     "category": "headphones",
     "price": 349.0,
@@ -90,7 +90,7 @@
   {
     "id": "prod_co_hp_001",
     "sku": "CG-HP-LOOP",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Loop Earbuds",
     "category": "headphones",
     "price": 129.0,
@@ -102,7 +102,7 @@
   {
     "id": "prod_co_hp_002",
     "sku": "CG-HP-FLOW",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Flow On-Ear",
     "category": "headphones",
     "price": 179.0,
@@ -114,7 +114,7 @@
   {
     "id": "prod_nw_gm_001",
     "sku": "NW-GM-CTRL",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Arcade Controller",
     "category": "gaming",
     "price": 79.0,
@@ -126,7 +126,7 @@
   {
     "id": "prod_co_gm_001",
     "sku": "CG-GM-KEY",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Mechanist Keyboard",
     "category": "gaming",
     "price": 149.0,
@@ -138,7 +138,7 @@
   {
     "id": "prod_nw_hm_001",
     "sku": "NW-HM-KETTLE",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "name": "Northwind Ember Electric Kettle",
     "category": "home",
     "price": 89.0,
@@ -150,7 +150,7 @@
   {
     "id": "prod_co_hm_001",
     "sku": "CG-HM-LAMP",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Halo Desk Lamp",
     "category": "home",
     "price": 119.0,
@@ -162,7 +162,7 @@
   {
     "id": "prod_co_hm_002",
     "sku": "CG-HM-VAC",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "name": "Contoso Whisk Cordless Vacuum",
     "category": "home",
     "price": 299.0,

@@ -1,0 +1,42 @@
+{
+  "light": {
+    "background": "0 0% 100%",
+    "foreground": "222 47% 11%",
+    "card": "0 0% 100%",
+    "cardForeground": "222 47% 11%",
+    "primary": "215 82% 53%",
+    "primaryForeground": "0 0% 100%",
+    "secondary": "214 32% 96%",
+    "secondaryForeground": "222 47% 11%",
+    "muted": "214 32% 96%",
+    "mutedForeground": "215 16% 47%",
+    "accent": "214 95% 93%",
+    "accentForeground": "215 82% 32%",
+    "border": "214 25% 88%",
+    "input": "214 25% 88%",
+    "ring": "215 82% 53%",
+    "destructive": "0 72% 51%",
+    "destructiveForeground": "0 0% 100%"
+  },
+  "dark": {
+    "background": "222 47% 7%",
+    "foreground": "210 40% 98%",
+    "card": "222 43% 10%",
+    "cardForeground": "210 40% 98%",
+    "primary": "213 94% 68%",
+    "primaryForeground": "222 47% 11%",
+    "secondary": "217 33% 17%",
+    "secondaryForeground": "210 40% 98%",
+    "muted": "217 33% 17%",
+    "mutedForeground": "215 20% 65%",
+    "accent": "217 33% 22%",
+    "accentForeground": "213 94% 82%",
+    "border": "217 33% 22%",
+    "input": "217 33% 22%",
+    "ring": "213 94% 68%",
+    "destructive": "0 63% 42%",
+    "destructiveForeground": "210 40% 98%"
+  },
+  "radius": "0.65rem",
+  "fontFamily": "ui-sans-serif, system-ui, sans-serif"
+}

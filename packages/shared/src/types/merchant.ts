@@ -7,7 +7,7 @@
  * able to render funnel-per-merchant views without a join.
  */
 export interface Merchant {
-  /** Stable synthetic id, e.g. `mrch_northwind`. */
+  /** Canonical merchant id shared across merchant and payment-provider configuration, e.g. `northwind`. */
   id: string;
   /** Human-readable name. */
   name: string;

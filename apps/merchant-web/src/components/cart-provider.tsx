@@ -36,37 +36,59 @@ export interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null)
 
-const STORAGE_KEY = 'acme-cart'
+const LEGACY_STORAGE_KEY = 'acme-cart'
+
+function isValidCartItem(item: unknown, merchantId: string): item is CartItem {
+  if (!item || typeof item !== 'object') return false
+  const candidate = item as Partial<CartItem>
+  return Boolean(
+    candidate.product &&
+      typeof candidate.product === 'object' &&
+      (candidate.product as Product).merchantId === merchantId &&
+      typeof candidate.quantity === 'number' &&
+      Number.isInteger(candidate.quantity) &&
+      candidate.quantity > 0,
+  )
+}
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-export function CartProvider({ children }: { children: ReactNode }) {
+export function CartProvider({ children, merchantId }: { children: ReactNode; merchantId: string }) {
+  const storageKey = `acme-cart:${merchantId}`
   const [items, setItems] = useState<CartItem[]>([])
 
   // Hydrate from localStorage on client mount. useEffect only runs in
   // the browser, so this is safe during SSR (localStorage is unavailable).
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = localStorage.getItem(storageKey) ?? localStorage.getItem(LEGACY_STORAGE_KEY)
       if (stored) {
-        setItems(JSON.parse(stored) as CartItem[])
+        const parsed: unknown = JSON.parse(stored)
+        const validItems = Array.isArray(parsed)
+          ? parsed.filter((item): item is CartItem => isValidCartItem(item, merchantId))
+          : []
+        setItems(validItems)
+        if (stored === localStorage.getItem(LEGACY_STORAGE_KEY)) {
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+        }
       }
     } catch {
       // Ignore parse / quota / access errors (e.g. incognito with strict
       // storage restrictions).
     }
-  }, [])
+  }, [merchantId, storageKey])
 
   // Persist to localStorage on every state change.
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+      localStorage.setItem(storageKey, JSON.stringify(items))
     } catch {
       // Ignore storage write errors.
     }
-  }, [items])
+  }, [items, storageKey])
 
   const addItem = useCallback((product: Product) => {
+    if (product.merchantId !== merchantId) return
     setItems((prev) => {
       const existing = prev.find((item) => item.product.id === product.id)
       if (existing) {
@@ -78,7 +100,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
       return [...prev, { product, quantity: 1 }]
     })
-  }, [])
+  }, [merchantId])
 
   const removeItem = useCallback((productId: string) => {
     setItems((prev) => prev.filter((item) => item.product.id !== productId))

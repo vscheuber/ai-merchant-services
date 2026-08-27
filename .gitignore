@@ -33,6 +33,7 @@ yarn-error.log*
 
 # Service manager PID files
 scripts/pids/*.pid
+scripts/pids/*.json
 
 # OS / editor cruft
 .DS_Store

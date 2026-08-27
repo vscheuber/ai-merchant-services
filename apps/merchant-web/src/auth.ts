@@ -35,10 +35,17 @@ declare module "next-auth" {
     userId?: string
     /** Epoch milliseconds when the merchant access token expires. */
     accessTokenExpiresAt?: number
+    /** First name from the merchant identity-provider profile. */
+    firstName?: string
+    /** Opaque diagnostic trace session associated with this login. */
+    traceSessionId?: string
   }
 }
 
 import NextAuth from "next-auth"
+import type { TokenTraceStage } from '@acme/shared'
+import { decodeJwtClaims } from './lib/alpha-token'
+import { appendMerchantTokenTrace } from './lib/token-trace-store'
 
 interface RefreshedTokenResponse {
   access_token: string
@@ -46,6 +53,13 @@ interface RefreshedTokenResponse {
   expires_at?: number
   refresh_token?: string
 }
+
+// Keep the merchant-web session bounded even when an older Auth.js cookie does
+// not contain access-token expiry metadata. Auth.js defaults JWT sessions to 30
+// days; a merchant browser session should not remain usable after a day of
+// inactivity.
+const MERCHANT_SESSION_MAX_AGE_SECONDS = 24 * 60 * 60
+const MERCHANT_SESSION_MAX_AGE_MS = MERCHANT_SESSION_MAX_AGE_SECONDS * 1000
 
 function getJwtExpiry(token: string | undefined): number | undefined {
   const payload = token?.split('.')[1]
@@ -57,6 +71,21 @@ function getJwtExpiry(token: string | undefined): number | undefined {
   } catch {
     return undefined
   }
+}
+
+function getFirstName(name: unknown): string | undefined {
+  if (typeof name !== 'string') return undefined
+  const firstName = name.trim().split(/\s+/)[0]
+  return firstName || undefined
+}
+
+function getProfileFirstName(profile: Record<string, unknown> | undefined): string | undefined {
+  return (
+    getFirstName(profile?.given_name) ??
+    getFirstName(profile?.givenName) ??
+    getFirstName(profile?.firstName) ??
+    getFirstName(profile?.name)
+  )
 }
 
 async function refreshMerchantAccessToken(refreshToken: string): Promise<RefreshedTokenResponse> {
@@ -84,6 +113,10 @@ async function refreshMerchantAccessToken(refreshToken: string): Promise<Refresh
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  session: {
+    strategy: 'jwt',
+    maxAge: MERCHANT_SESSION_MAX_AGE_SECONDS,
+  },
   providers: [
     {
       id: "aic",
@@ -102,7 +135,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   ],
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, profile }) {
       // `account` is only non-null on the first sign-in event; on subsequent
       // session reads the JWT is decoded from the cookie and account is null.
       if (account?.access_token) {
@@ -111,11 +144,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token["accessTokenExpiresAt"] = account.expires_at
           ? account.expires_at * 1000
           : getJwtExpiry(account.access_token) ?? Date.now() + (account.expires_in ?? 3600) * 1000
+        token["sessionExpiresAt"] = Date.now() + MERCHANT_SESSION_MAX_AGE_MS
+        token["firstName"] = getProfileFirstName(profile) ?? getFirstName(token.name)
+        token["traceSessionId"] = crypto.randomUUID()
+        const traceSessionId = token["traceSessionId"] as string
+        appendMerchantTokenTrace({
+          traceSessionId,
+          requestId: crypto.randomUUID(),
+          source: 'merchant-web-auth',
+          capturedAt: new Date().toISOString(),
+          stages: [
+            {
+              name: 'merchant-user-token',
+              status: 'succeeded',
+              tokenRole: 'merchant-user',
+              tokenType: 'Bearer access token',
+              // Login traces never persist raw credentials; downstream tracing has a separate explicit opt-in.
+              claims: decodeJwtClaims(account.access_token),
+            } satisfies TokenTraceStage,
+          ],
+        })
+      }
+
+      const sessionExpiresAt =
+        (token["sessionExpiresAt"] as number | undefined) ??
+        (typeof token.iat === 'number' ? token.iat * 1000 + MERCHANT_SESSION_MAX_AGE_MS : undefined)
+      // Cookies issued before the explicit session lifetime was introduced do
+      // not carry sessionExpiresAt. Expire them instead of allowing Auth.js to
+      // roll their default 30-day JWT lifetime forward on each session read.
+      if (!token["sessionExpiresAt"] && !account) {
+        return null
+      }
+      if (sessionExpiresAt && sessionExpiresAt <= Date.now()) {
+        return null
       }
 
       const expiresAt = token["accessTokenExpiresAt"] as number | undefined
       const refreshToken = token["refreshToken"] as string | undefined
-      if (expiresAt && expiresAt <= Date.now() + 30_000 && refreshToken) {
+      if (expiresAt && expiresAt <= Date.now() + 30_000) {
+        if (!refreshToken) return null
         try {
           const refreshed = await refreshMerchantAccessToken(refreshToken)
           token["accessToken"] = refreshed.access_token
@@ -124,10 +191,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? refreshed.expires_at * 1000
             : getJwtExpiry(refreshed.access_token) ?? Date.now() + (refreshed.expires_in ?? 3600) * 1000
         } catch {
-          // The refresh token is no longer usable. Clear the access token so the
-          // header switches to Sign in and the chatbot can fall back to guest mode.
-          delete token["accessToken"]
-          delete token["accessTokenExpiresAt"]
+          // The refresh token is no longer usable. Expire the Auth.js session so
+          // both server and client headers switch to Sign in.
+          return null
         }
       }
       return token
@@ -147,6 +213,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // token.sub is the merchant realm user's _id — provisioned as "user_ada"
       // etc. — so it matches the userId keys in data/*.json.
       ;(session as Session).userId = token.sub
+      ;(session as Session).firstName =
+        (token["firstName"] as string | undefined) ?? getFirstName(session.user?.name)
+      ;(session as Session).traceSessionId = token["traceSessionId"] as string | undefined
       return session
     },
   },

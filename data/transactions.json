@@ -2,7 +2,7 @@
   {
     "id": "txn_00001",
     "userId": "user_ada",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "merchantName": "Northwind Retail",
     "amount": 1299.0,
     "currency": "USD",
@@ -14,7 +14,7 @@
   {
     "id": "txn_00002",
     "userId": "user_ada",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "merchantName": "Northwind Retail",
     "amount": 428.0,
     "currency": "USD",
@@ -29,7 +29,7 @@
   {
     "id": "txn_00003",
     "userId": "user_grace",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "merchantName": "Northwind Retail",
     "amount": 799.0,
     "currency": "USD",
@@ -41,7 +41,7 @@
   {
     "id": "txn_00004",
     "userId": "user_grace",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "merchantName": "Northwind Retail",
     "amount": 89.0,
     "currency": "USD",
@@ -53,7 +53,7 @@
   {
     "id": "txn_00005",
     "userId": "user_alan",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "merchantName": "Contoso Goods",
     "amount": 999.0,
     "currency": "USD",
@@ -65,7 +65,7 @@
   {
     "id": "txn_00006",
     "userId": "user_alan",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "merchantName": "Contoso Goods",
     "amount": 308.0,
     "currency": "USD",
@@ -80,7 +80,7 @@
   {
     "id": "txn_00007",
     "userId": "user_ada",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "merchantName": "Northwind Retail",
     "amount": 1899.0,
     "currency": "USD",
@@ -92,7 +92,7 @@
   {
     "id": "txn_00009",
     "userId": "user_ada",
-    "merchantId": "mrch_northwind",
+    "merchantId": "northwind",
     "merchantName": "Northwind Retail",
     "amount": 799.0,
     "currency": "USD",
@@ -104,7 +104,7 @@
   {
     "id": "txn_00008",
     "userId": "user_alan",
-    "merchantId": "mrch_contoso",
+    "merchantId": "contoso",
     "merchantName": "Contoso Goods",
     "amount": 149.0,
     "currency": "USD",

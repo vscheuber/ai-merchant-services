@@ -81,6 +81,8 @@ export interface ChatRequest {
   trace?: boolean;
   /** Include raw token strings in diagnostics only after explicit opt-in. */
   traceRaw?: boolean;
+  /** Opaque browser/auth diagnostic session identifier. */
+  traceSessionId?: string;
 }
 
 /**

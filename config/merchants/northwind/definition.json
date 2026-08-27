@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "northwind",
+  "name": "Northwind Retail",
+  "brand": "Northwind Retail",
+  "tagline": "Consumer electronics, made simple",
+  "domains": ["northwind.mytest.run"],
+  "assistantName": "Shopping Assistant",
+  "catalogMerchantId": "northwind",
+  "onboarding": {
+    "status": "ready",
+    "merchantOidcClientId": "merchant-web",
+    "callbackPath": "/api/auth/callback/aic"
+  }
+}

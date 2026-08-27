@@ -95,6 +95,7 @@ export async function exchangeMerchantAuthCodeForIdToken(
   trace?.push({
     name: 'step-1-merchant-code-exchange',
     status: 'succeeded',
+    tokenRole: 'merchant-user',
     endpoint: tokenUrl,
     rawToken: traceRaw ? body.id_token : undefined,
   });
@@ -163,6 +164,7 @@ export async function authenticateMerchantTokenLoginJourney(
   trace?.push({
     name: 'step-1-merchant-token-login',
     status: 'succeeded',
+    tokenRole: 'session',
     endpoint: authenticateUrl,
     rawToken: traceRaw ? body.tokenId : undefined,
   });
@@ -295,6 +297,7 @@ export async function bridgeSessionToAccessToken(
   trace?.push({
     name: 'step-1-session-to-token-bridge',
     status: 'succeeded',
+    tokenRole: 'payment-user',
     endpoint: tokenEndpoint,
     tokenType: tokenBody.token_type,
     rawToken: traceRaw ? tokenBody.access_token : undefined,

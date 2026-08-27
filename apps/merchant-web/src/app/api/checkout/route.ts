@@ -20,10 +20,12 @@ import type { Cart } from '@acme/shared'
 
 import { auth } from '../../../auth'
 import { getPaymentToken } from '../../../lib/alpha-token'
+import { loadMerchantConfig } from '../../../lib/merchant-config'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // --- Auth guard ---
   const session = await auth()
+  const merchantConfig = await loadMerchantConfig()
   if (!session?.accessToken) {
     return NextResponse.json(
       { error: 'unauthorized', message: 'No active session.' },
@@ -64,12 +66,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
+  const submittedCart = cart as Cart
+  if (submittedCart.merchantId !== merchantConfig.merchantId) {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'Cart belongs to a different merchant.' },
+      { status: 400 },
+    )
+  }
+
   // --- Exchange merchant token for payment token before calling payment-api ---
   // payment-api only accepts payment realm tokens; using the merchant token would
   // result in HTTP 401 from the payment-api JWT middleware.
   let paymentToken: string
   try {
-    paymentToken = await getPaymentToken(session.accessToken, session.user)
+    paymentToken = await getPaymentToken(session.accessToken, session.user, {
+      enabled: true,
+      traceSessionId: session.traceSessionId,
+    }, merchantConfig.merchantId)
   } catch (err) {
     console.error('[checkout proxy] Failed to obtain payment token:', err)
     return NextResponse.json(

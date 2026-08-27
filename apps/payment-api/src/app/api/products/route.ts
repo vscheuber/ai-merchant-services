@@ -34,6 +34,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const merchantRecords = await readJson<{ id: string }[]>(dataFilePath('merchants'));
+  if (!merchantRecords.some((merchant) => merchant.id === merchantId)) {
+    return NextResponse.json(
+      { error: 'not_found', message: 'Unknown merchant catalog.' },
+      { status: 404 },
+    );
+  }
+
   const filtered = products.filter((p) => p.merchantId === merchantId);
 
   return NextResponse.json(filtered);

@@ -26,51 +26,69 @@ import type { ReactNode } from 'react';
 import { ThemeProvider } from '@acme/ui';
 import { SessionProvider } from 'next-auth/react';
 import { CartProvider } from '../components/cart-provider';
+import { MerchantConfigProvider } from '../components/merchant-config-provider';
 import { TokenTracePanel } from '../components/token-trace-panel';
+import { themeCssVariables } from '../config/merchant';
+import { loadMerchantConfig } from '../lib/merchant-config';
+import { auth } from '../auth';
 
 import './globals.css';
 
 const CHATBOT_EMBED_URL =
   process.env['NEXT_PUBLIC_CHATBOT_EMBED_URL'] ?? 'http://localhost:3004/chatbot/embed.js';
-const CHATBOT_NAME =
-  process.env['NEXT_PUBLIC_CHATBOT_NAME'] ?? 'Shopping Assistant';
+const CHATBOT_URL =
+  process.env['NEXT_PUBLIC_CHATBOT_URL'] ?? 'https://payments.mytestrun.com/chatbot/api/chat';
 
 // Additive silent-SSO trust setup — the merchant-bridge public client (bravo
 // realm) the widget uses to reuse this app's SSO cookie. Each is optional;
 // the widget falls back to guest mode if any is unset.
-const MERCHANT_ID = process.env['NEXT_PUBLIC_MERCHANT_ID'];
 const MERCHANT_IDP_AUTHORIZE_URL = process.env['NEXT_PUBLIC_MERCHANT_IDP_AUTHORIZE_URL'];
 const MERCHANT_IDP_TOKEN_URL = process.env['NEXT_PUBLIC_MERCHANT_IDP_TOKEN_URL'];
 const MERCHANT_BRIDGE_CLIENT_ID = process.env['NEXT_PUBLIC_MERCHANT_BRIDGE_CLIENT_ID'];
 const SILENT_CALLBACK_URL = process.env['NEXT_PUBLIC_SILENT_CALLBACK_URL'];
 
-export const metadata = {
-  title: 'Northwind Retail — shop electronics, laptops, phones, and more',
-  description: 'Northwind Retail is a consumer-electronics storefront. Browse the catalog, add items to your cart, and use the shopping assistant for personalised recommendations.',
-};
+export const dynamic = 'force-dynamic';
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export async function generateMetadata() {
+  const config = await loadMerchantConfig();
+  return {
+    title: `${config.brand} — shop the catalog`,
+    description: `${config.brand} storefront. Browse the catalog, add items to your cart, and use the shopping assistant for personalised recommendations.`,
+  };
+}
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const merchantConfig = await loadMerchantConfig();
+  const session = await auth();
+  const chatbotName = process.env['NEXT_PUBLIC_CHATBOT_NAME'] ?? merchantConfig.assistantName;
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
+        <style dangerouslySetInnerHTML={{ __html: themeCssVariables(merchantConfig) }} />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <SessionProvider>
-            <CartProvider>
-              {children}
-            </CartProvider>
+          <SessionProvider refetchOnWindowFocus refetchInterval={300}>
+            <MerchantConfigProvider config={merchantConfig}>
+              <CartProvider merchantId={merchantConfig.merchantId}>
+                <div className="merchant-theme">{children}</div>
+              </CartProvider>
+            </MerchantConfigProvider>
           </SessionProvider>
         </ThemeProvider>
         {/* Set chatbot config before the async embed script loads. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `window.CHATBOT_CONFIG = ${JSON.stringify({
-              name: CHATBOT_NAME,
-              chatUrl: 'https://payments.mytestrun.com/chatbot/api/chat',
-              merchantId: MERCHANT_ID,
+              name: chatbotName,
+              chatUrl: CHATBOT_URL,
+              logoUrl: merchantConfig.logoUrl,
+              theme: merchantConfig.theme,
+              merchantId: merchantConfig.merchantId,
+              catalogMerchantId: merchantConfig.catalog.merchantId,
               merchantIdpAuthorizeUrl: MERCHANT_IDP_AUTHORIZE_URL,
               merchantIdpTokenUrl: MERCHANT_IDP_TOKEN_URL,
               merchantBridgeClientId: MERCHANT_BRIDGE_CLIENT_ID,
               silentCallbackUrl: SILENT_CALLBACK_URL,
+              traceSessionId: session?.traceSessionId ?? undefined,
             })};`,
           }}
         />

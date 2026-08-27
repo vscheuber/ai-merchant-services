@@ -25,7 +25,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import type { WalletCard, CheckoutSession } from '@acme/shared'
 import {
-  AppShell,
   Button,
   Card,
   CardContent,
@@ -35,15 +34,8 @@ import {
 } from '@acme/ui'
 import { useCart } from '../../components/cart-provider'
 import { ClientHeaderActions } from '../../components/client-header-actions'
-
-// ── Nav ───────────────────────────────────────────────────────────────────────
-
-const nav = [
-  { label: 'Products', href: '/products' },
-  { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
-  { label: 'Account', href: '/account' },
-] as const
+import { StorefrontShell } from '../../components/storefront-shell'
+import { useMerchantConfig } from '../../components/merchant-config-provider'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +67,7 @@ export interface CheckoutFormProps {
 
 export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
   const { items, clearCart } = useCart()
+  const merchantConfig = useMerchantConfig()
 
   const [selectedCardId, setSelectedCardId] = useState<string>(walletCards[0]?.id ?? '')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -89,7 +82,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
   // replaces this view; cart is empty but result is shown.
   if (items.length === 0 && result === null) {
     return (
-      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<ClientHeaderActions />}>
+      <StorefrontShell actions={<ClientHeaderActions />}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
           <h1 className="text-3xl font-semibold tracking-tight">Your cart is empty</h1>
@@ -108,7 +101,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
             </CardContent>
           </Card>
         </section>
-      </AppShell>
+      </StorefrontShell>
     )
   }
 
@@ -123,7 +116,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
         : `Payment ${result.status}`
 
     return (
-      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<ClientHeaderActions />}>
+      <StorefrontShell actions={<ClientHeaderActions />}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
           <h1 className="text-3xl font-semibold tracking-tight">{statusHeading}</h1>
@@ -154,7 +147,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
             </CardContent>
           </Card>
         </section>
-      </AppShell>
+      </StorefrontShell>
     )
   }
 
@@ -171,7 +164,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
     const cart = {
       id: `cart_${Date.now()}`,
       userId,
-      merchantId: 'mrch_northwind',
+      merchantId: merchantConfig.merchantId,
       currency,
       items: items.map(({ product, quantity }) => ({
         sku: product.sku,
@@ -212,7 +205,7 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
 
   // ── Checkout form ─────────────────────────────────────────────────────────
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+    <StorefrontShell actions={<ClientHeaderActions />}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Checkout</p>
         <h1 className="text-3xl font-semibold tracking-tight">Review &amp; pay</h1>
@@ -322,6 +315,6 @@ export function CheckoutForm({ walletCards, userId }: CheckoutFormProps) {
           </div>
         </section>
       </form>
-    </AppShell>
+    </StorefrontShell>
   )
 }

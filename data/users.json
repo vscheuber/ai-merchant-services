@@ -5,7 +5,7 @@
     "email": "ada.lovelace@northwind.local",
     "givenName": "Ada",
     "sn": "Lovelace",
-    "merchantId": "mrch_northwind"
+    "merchantId": "northwind"
   },
   {
     "id": "user_grace",
@@ -13,7 +13,7 @@
     "email": "grace.hopper@northwind.local",
     "givenName": "Grace",
     "sn": "Hopper",
-    "merchantId": "mrch_northwind"
+    "merchantId": "northwind"
   },
   {
     "id": "user_alan",
@@ -21,6 +21,6 @@
     "email": "alan.turing@contoso.local",
     "givenName": "Alan",
     "sn": "Turing",
-    "merchantId": "mrch_contoso"
+    "merchantId": "contoso"
   }
 ]

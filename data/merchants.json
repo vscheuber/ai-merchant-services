@@ -1,6 +1,6 @@
 [
   {
-    "id": "mrch_northwind",
+    "id": "northwind",
     "name": "Northwind Retail",
     "brand": "Northwind Retail",
     "domains": ["northwind.local"],
@@ -8,7 +8,7 @@
     "logoUrl": "/brand/northwind.svg"
   },
   {
-    "id": "mrch_contoso",
+    "id": "contoso",
     "name": "Contoso Goods",
     "brand": "Contoso Goods",
     "domains": ["contoso.local"],

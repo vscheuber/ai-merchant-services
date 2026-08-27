@@ -13,65 +13,51 @@
 // Next.js App Router requires a default export.
 
 import type { Product } from '@acme/shared'
-import { AppShell } from '@acme/ui'
 import { auth } from '../../auth'
 import { getPaymentToken } from '../../lib/alpha-token'
+import { getCatalog } from '../../lib/catalog'
 import { ProductGrid } from '../../components/product-grid'
 import { MerchantHeaderActions } from '../../components/merchant-header-actions'
-
-const nav = [
-  { label: 'Products', href: '/products' },
-  { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
-  { label: 'Account', href: '/account' },
-] as const
+import { StorefrontShell } from '../../components/storefront-shell'
+import { loadMerchantConfig } from '../../lib/merchant-config'
 
 export default async function ProductsPage() {
   const session = await auth()
   const isMember = Boolean(session?.accessToken)
+  const merchantConfig = await loadMerchantConfig()
 
-  const baseUrl = process.env['PAYMENT_API_BASE_URL'] ?? 'http://localhost:3003'
   let products: Product[] = []
   let fetchError: string | null = null
 
   // Only attempt the merchant→payment-provider token exchange for authenticated users.
   // Anonymous visitors fetch products without a Bearer token; the payment-provider-api
   // /api/products endpoint is configured to allow unauthenticated reads.
-  const headers: Record<string, string> = {}
   if (session?.accessToken) {
     try {
-      const downstreamToken = await getPaymentToken(session.accessToken, session.user)
-      if (downstreamToken) headers['Authorization'] = `Bearer ${downstreamToken}`
+      await getPaymentToken(session.accessToken, session.user, {
+        enabled: true,
+        rawTokens: false,
+        traceSessionId: session.traceSessionId,
+        onTrace: () => undefined,
+      }, merchantConfig.merchantId)
     } catch {
       // Non-blocking — anonymous product fetch is the fallback.
     }
   }
 
   try {
-    const res = await fetch(
-      `${baseUrl}/api/products?merchantId=mrch_northwind`,
-      {
-        headers,
-        // Never cache — product stock can change between requests.
-        cache: 'no-store',
-      },
-    )
-    if (res.ok) {
-      products = (await res.json()) as Product[]
-    } else {
-      fetchError = `Unable to load products (HTTP ${res.status.toString()}).`
-    }
-  } catch {
-    fetchError = 'Unable to connect to the product catalog. Please try again later.'
+    products = await getCatalog(merchantConfig)
+  } catch (error) {
+    fetchError = error instanceof Error ? error.message : 'Unable to load the product catalog.'
   }
 
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<MerchantHeaderActions />}>
+    <StorefrontShell actions={<MerchantHeaderActions />}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Products</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Northwind catalog</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">{merchantConfig.brand} catalog</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Browse the full Northwind Retail product range and add items to your cart.
+          Browse the full {merchantConfig.brand} product range and add items to your cart.
         </p>
       </section>
 
@@ -82,6 +68,6 @@ export default async function ProductsPage() {
           <ProductGrid products={products} isMember={isMember} />
         )}
       </section>
-    </AppShell>
+    </StorefrontShell>
   )
 }
