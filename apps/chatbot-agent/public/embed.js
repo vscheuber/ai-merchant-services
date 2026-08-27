@@ -38,8 +38,10 @@
   var MOUNT_ID = 'acme-assist-overlay-root';
 
   // Read chatbot display name from window.CHATBOT_CONFIG set by the host page.
-  var CHATBOT_NAME =
-    (window.CHATBOT_CONFIG && window.CHATBOT_CONFIG.name) || 'Shopping Assistant';
+  var CHATBOT_CONFIG = window.CHATBOT_CONFIG || {};
+  var CHATBOT_NAME = CHATBOT_CONFIG.name || 'Shopping Assistant';
+  var CHATBOT_LOGO_URL = CHATBOT_CONFIG.logoUrl || null;
+  var CHATBOT_THEME = CHATBOT_CONFIG.theme || {};
 
   // Derive the chatbot API base URL from this script's own src.
   // document.currentScript is null for async scripts, so we search the DOM.
@@ -64,7 +66,7 @@
   // Set by the host page (merchant-web's root layout or equivalent) — the
   // additive, per-merchant trust setup. Any field missing skips silent SSO
   // entirely and the widget starts in guest mode.
-  var cfg = window.CHATBOT_CONFIG || {};
+  var cfg = CHATBOT_CONFIG;
   var MERCHANT_ID = cfg.merchantId || null;
   var MERCHANT_IDP_AUTHORIZE_URL = cfg.merchantIdpAuthorizeUrl || null;
   var MERCHANT_BRIDGE_CLIENT_ID = cfg.merchantBridgeClientId || null;
@@ -72,12 +74,40 @@
   var SSO_POPUP_TIMEOUT_MS = 4000;
   var traceEnabled = false;
   var traceRaw = false;
+  var traceSessionId = null;
+
+  function newTraceSessionId() {
+    if (window.crypto && window.crypto.randomUUID) {
+      return window.crypto.randomUUID() + '-' + window.crypto.randomUUID();
+    }
+    return String(Date.now()) + '-' + String(Math.random()).slice(2);
+  }
+
+  function getTraceSessionId() {
+    if (traceSessionId) return traceSessionId;
+    if (cfg.traceSessionId) {
+      traceSessionId = cfg.traceSessionId;
+      return traceSessionId;
+    }
+    try {
+      traceSessionId = window.sessionStorage.getItem('merchant-demo-token-trace-session');
+      if (!traceSessionId) {
+        traceSessionId = newTraceSessionId();
+        window.sessionStorage.setItem('merchant-demo-token-trace-session', traceSessionId);
+      }
+    } catch (_) {
+      traceSessionId = newTraceSessionId();
+    }
+    return traceSessionId;
+  }
+
+  getTraceSessionId();
 
   function syncTraceSettings() {
     var detail = null;
     try {
-      traceEnabled = window.sessionStorage.getItem('northwind-demo-token-trace') === 'on';
-      detail = window.sessionStorage.getItem('northwind-demo-token-trace-raw') === 'on';
+      traceEnabled = window.sessionStorage.getItem('merchant-demo-token-trace') === 'on';
+      detail = window.sessionStorage.getItem('merchant-demo-token-trace-raw') === 'on';
     } catch (_) {
       // Storage may be unavailable in a restrictive embed context.
     }
@@ -89,12 +119,13 @@
     traceEnabled = Boolean(detail && detail.enabled);
     traceRaw = Boolean(detail && detail.rawTokens);
     try {
-      window.sessionStorage.setItem('northwind-demo-token-trace', traceEnabled ? 'on' : 'off');
-      window.sessionStorage.setItem('northwind-demo-token-trace-raw', traceRaw ? 'on' : 'off');
+      window.sessionStorage.setItem('merchant-demo-token-trace', traceEnabled ? 'on' : 'off');
+      window.sessionStorage.setItem('merchant-demo-token-trace-raw', traceRaw ? 'on' : 'off');
     } catch (_) {
       // Storage may be unavailable in a restrictive embed context.
     }
   });
+  window.dispatchEvent(new CustomEvent('chatbot:trace-settings-ready'));
 
   // ── Module-level state ─────────────────────────────────────────────────────
   // Preserved across open/close cycles so conversation is not lost on minimise.
@@ -181,15 +212,24 @@
     boxSizing: 'border-box',
   };
 
+  var themePrimary = CHATBOT_THEME.light && CHATBOT_THEME.light.primary ? 'hsl(' + CHATBOT_THEME.light.primary + ')' : '#0f172a';
+  var themePrimaryForeground = CHATBOT_THEME.light && CHATBOT_THEME.light.primaryForeground ? 'hsl(' + CHATBOT_THEME.light.primaryForeground + ')' : '#f8fafc';
+  var themeBackground = CHATBOT_THEME.light && CHATBOT_THEME.light.background ? 'hsl(' + CHATBOT_THEME.light.background + ')' : '#ffffff';
+  var themeForeground = CHATBOT_THEME.light && CHATBOT_THEME.light.foreground ? 'hsl(' + CHATBOT_THEME.light.foreground + ')' : '#0f172a';
+  var themeBorder = CHATBOT_THEME.light && CHATBOT_THEME.light.border ? 'hsl(' + CHATBOT_THEME.light.border + ')' : '#e2e8f0';
+  var themeMuted = CHATBOT_THEME.light && CHATBOT_THEME.light.muted ? 'hsl(' + CHATBOT_THEME.light.muted + ')' : '#f8fafc';
+  var themeMutedForeground = CHATBOT_THEME.light && CHATBOT_THEME.light.mutedForeground ? 'hsl(' + CHATBOT_THEME.light.mutedForeground + ')' : '#64748b';
+  var themeRadius = CHATBOT_THEME.radius || '12px';
+
   var panelStyle = {
     display: 'flex',
     flexDirection: 'column',
     height: '512px',
     maxHeight: 'calc(100vh - 32px)',
-    background: '#ffffff',
-    color: '#0f172a',
-    border: '1px solid #e2e8f0',
-    borderRadius: '12px',
+    background: themeBackground,
+    color: themeForeground,
+    border: '1px solid ' + themeBorder,
+    borderRadius: themeRadius,
     overflow: 'hidden',
     boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.35)',
     boxSizing: 'border-box',
@@ -199,14 +239,14 @@
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid #e2e8f0',
-    background: '#f8fafc',
+    borderBottom: '1px solid ' + themeBorder,
+    background: themeMuted,
     padding: '12px 16px',
   };
 
-  var titleWrapStyle = { display: 'flex', flexDirection: 'column', lineHeight: '1.15' };
-  var titleStyle = { fontSize: '14px', fontWeight: '600', color: '#0f172a' };
-  var subtitleStyle = { fontSize: '12px', color: '#64748b' };
+  var titleWrapStyle = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', lineHeight: '1.15' };
+  var titleStyle = { fontSize: '14px', fontWeight: '600', color: themeForeground };
+  var subtitleStyle = { fontSize: '12px', color: themeMutedForeground };
 
   var closeBtnStyle = {
     display: 'inline-flex',
@@ -250,9 +290,9 @@
     resize: 'none',
     padding: '8px 12px',
     borderRadius: '6px',
-    border: '1px solid #cbd5e1',
-    background: '#ffffff',
-    color: '#0f172a',
+    border: '1px solid ' + themeBorder,
+    background: themeBackground,
+    color: themeForeground,
     fontSize: '14px',
     lineHeight: '1.35',
     outline: 'none',
@@ -266,8 +306,8 @@
     padding: '8px 14px',
     borderRadius: '6px',
     border: '0',
-    background: '#0f172a',
-    color: '#f8fafc',
+    background: themePrimary,
+    color: themePrimaryForeground,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',
@@ -281,8 +321,8 @@
     padding: '8px 12px',
     borderRadius: '6px',
     border: '0',
-    background: '#94a3b8',
-    color: '#f8fafc',
+    background: themeMutedForeground,
+    color: themePrimaryForeground,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'not-allowed',
@@ -295,8 +335,8 @@
     padding: '8px 12px',
     borderRadius: '6px',
     border: '0',
-    background: '#0f172a',
-    color: '#f8fafc',
+    background: themePrimary,
+    color: themePrimaryForeground,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',
@@ -310,8 +350,8 @@
     padding: '10px 16px',
     borderRadius: '999px',
     border: '0',
-    background: '#0f172a',
-    color: '#f8fafc',
+    background: themePrimary,
+    color: themePrimaryForeground,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',
@@ -340,8 +380,8 @@
               borderRadius: '10px',
               fontSize: '14px',
               lineHeight: '1.35',
-              background: isUser ? '#0f172a' : '#f1f5f9',
-              color: isUser ? '#f8fafc' : '#0f172a',
+              background: isUser ? themePrimary : themeMuted,
+              color: isUser ? themePrimaryForeground : themeForeground,
             },
             text: text,
           },
@@ -626,6 +666,7 @@
             messages: messageHistory,
             trace: traceEnabled,
             traceRaw: traceRaw,
+            traceSessionId: getTraceSessionId(),
           },
           merchantCredentialFields(),
         ),
@@ -703,6 +744,9 @@
             messages: messageHistory,
             confirmedAt: confirmedAt,
             proposedPurchase: purchase,
+            trace: traceEnabled,
+            traceRaw: traceRaw,
+            traceSessionId: getTraceSessionId(),
           },
           merchantCredentialFields(),
         ),
@@ -713,6 +757,9 @@
         return res.json();
       })
       .then(function (data) {
+        if (data && data.trace) {
+          window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+        }
         cacheMerchantTokenFromResponse(data);
         var content =
           data && data.message && typeof data.message.content === 'string'
@@ -867,6 +914,9 @@
       [
         h('header', { style: headerStyle }, [
           h('div', { style: titleWrapStyle }, [
+            CHATBOT_LOGO_URL
+              ? h('img', { src: CHATBOT_LOGO_URL, alt: '', style: { width: '24px', height: '24px', objectFit: 'contain' } })
+              : null,
             h('span', { style: titleStyle, text: CHATBOT_NAME }),
             h('span', { style: subtitleStyle, text: 'Your shopping assistant' }),
           ]),

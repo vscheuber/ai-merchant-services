@@ -1,0 +1,42 @@
+{
+  "light": {
+    "background": "33 35% 97%",
+    "foreground": "24 33% 12%",
+    "card": "0 0% 100%",
+    "cardForeground": "24 33% 12%",
+    "primary": "20 58% 40%",
+    "primaryForeground": "0 0% 100%",
+    "secondary": "30 30% 92%",
+    "secondaryForeground": "24 33% 12%",
+    "muted": "30 30% 92%",
+    "mutedForeground": "24 12% 42%",
+    "accent": "31 75% 88%",
+    "accentForeground": "20 58% 28%",
+    "border": "30 20% 84%",
+    "input": "30 20% 84%",
+    "ring": "20 58% 40%",
+    "destructive": "0 72% 51%",
+    "destructiveForeground": "0 0% 100%"
+  },
+  "dark": {
+    "background": "24 25% 8%",
+    "foreground": "35 33% 96%",
+    "card": "24 24% 12%",
+    "cardForeground": "35 33% 96%",
+    "primary": "25 78% 64%",
+    "primaryForeground": "24 33% 12%",
+    "secondary": "24 20% 20%",
+    "secondaryForeground": "35 33% 96%",
+    "muted": "24 20% 20%",
+    "mutedForeground": "30 14% 70%",
+    "accent": "24 24% 26%",
+    "accentForeground": "28 90% 78%",
+    "border": "24 20% 27%",
+    "input": "24 20% 27%",
+    "ring": "25 78% 64%",
+    "destructive": "0 63% 42%",
+    "destructiveForeground": "35 33% 96%"
+  },
+  "radius": "0.8rem",
+  "fontFamily": "ui-sans-serif, system-ui, sans-serif"
+}

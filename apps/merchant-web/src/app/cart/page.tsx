@@ -12,16 +12,10 @@
 // Next.js App Router requires a default export.
 
 import Link from 'next/link'
-import { AppShell, Button, Card, CardContent, CardHeader, CardTitle, buttonVariants } from '@acme/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, buttonVariants } from '@acme/ui'
 import { useCart } from '../../components/cart-provider'
 import { ClientHeaderActions } from '../../components/client-header-actions'
-
-const nav = [
-  { label: 'Products', href: '/products' },
-  { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
-  { label: 'Account', href: '/account' },
-] as const
+import { StorefrontShell } from '../../components/storefront-shell'
 
 function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
@@ -38,7 +32,7 @@ export default function CartPage() {
   // ── Empty state ────────────────────────────────────────────────────────────
   if (items.length === 0) {
     return (
-      <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<ClientHeaderActions />}>
+      <StorefrontShell actions={<ClientHeaderActions />}>
         <section className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Cart</p>
           <h1 className="text-3xl font-semibold tracking-tight">Your cart is empty</h1>
@@ -59,13 +53,13 @@ export default function CartPage() {
             </CardContent>
           </Card>
         </section>
-      </AppShell>
+      </StorefrontShell>
     )
   }
 
   // ── Cart with items ────────────────────────────────────────────────────────
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav}>
+    <StorefrontShell actions={<ClientHeaderActions />}>
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Cart</p>
         <h1 className="text-3xl font-semibold tracking-tight">
@@ -116,6 +110,6 @@ export default function CartPage() {
           </Link>
         </div>
       </section>
-    </AppShell>
+    </StorefrontShell>
   )
 }

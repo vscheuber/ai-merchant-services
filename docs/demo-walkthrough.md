@@ -43,9 +43,9 @@ All merchant users authenticate against the **bravo realm** (merchant IDP) at `i
 
 | Name         | Username       | Password     | Merchant                   |
 | ------------ | -------------- | ------------ | -------------------------- |
-| Ada Lovelace | `ada.lovelace` | `Password1!` | Northwind (mrch_northwind) |
-| Grace Hopper | `grace.hopper` | `Password1!` | Northwind (mrch_northwind) |
-| Alan Turing  | `alan.turing`  | `Password1!` | Contoso (mrch_contoso)     |
+| Ada Lovelace | `ada.lovelace` | `Password1!` | Northwind (northwind) |
+| Grace Hopper | `grace.hopper` | `Password1!` | Northwind (northwind) |
+| Alan Turing  | `alan.turing`  | `Password1!` | Contoso (contoso)     |
 
 > Ada and Grace belong to Northwind Retail; Alan belongs to Contoso. The chatbot is wired to Northwind so Alan's token exchange produces a different merchant context.
 

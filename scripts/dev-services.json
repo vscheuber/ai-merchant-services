@@ -1,0 +1,9 @@
+{
+  "services": [
+    {"name":"merchant-web","port":3000,"probe":"/","expected":[200]},
+    {"name":"payment-user-web","port":3001,"probe":"/","expected":[200]},
+    {"name":"payment-admin-web","port":3002,"probe":"/admin/","expected":[200,308]},
+    {"name":"payment-api","port":3003,"probe":"/api/health","expected":[200],"body":"{\"status\":\"ok\",\"service\":\"payment-api\"}"},
+    {"name":"chatbot-agent","port":3004,"probe":"/chatbot/","expected":[200,308]}
+  ]
+}

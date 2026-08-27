@@ -1,0 +1,9 @@
+{
+  "status": "draft",
+  "merchantId": "contoso",
+  "issuer": "",
+  "audienceName": "merchant-bridge",
+  "authorisedParties": ["none", "merchant-bridge"],
+  "redirectUris": ["https://contoso.example/api/auth/callback/aic"],
+  "notes": "Complete the actual merchant IDP issuer, client, domain, and redirect URI before provisioning."
+}

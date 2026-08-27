@@ -23,9 +23,11 @@ import type { WalletCard } from '@acme/shared'
 import { auth } from '../../auth'
 import { getPaymentToken } from '../../lib/alpha-token'
 import { CheckoutForm } from './checkout-form'
+import { loadMerchantConfig } from '../../lib/merchant-config'
 
 export default async function CheckoutPage() {
   const session = await auth()
+  const merchantConfig = await loadMerchantConfig()
 
   // Checkout is account-backed; require an active merchant access token.
   // Using the same accessToken guard as the proxy route ensures the page only
@@ -44,7 +46,10 @@ export default async function CheckoutPage() {
   // empty wallet list and CheckoutForm shows a "no saved cards" message.
   let downstreamToken = ''
   try {
-    downstreamToken = await getPaymentToken(session.accessToken ?? '', session.user)
+    downstreamToken = await getPaymentToken(session.accessToken ?? '', session.user, {
+      enabled: true,
+      traceSessionId: session.traceSessionId,
+    }, merchantConfig.merchantId)
   } catch {
     // Non-blocking — wallet fetch below will return 401 → empty walletCards.
   }

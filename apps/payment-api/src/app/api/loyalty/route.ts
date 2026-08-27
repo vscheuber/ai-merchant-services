@@ -20,6 +20,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = request.nextUrl;
   const userId = searchParams.get('userId');
   const merchantId = searchParams.get('merchantId');
+  if (!userId || !merchantId) {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'userId and merchantId are required.' },
+      { status: 400 },
+    );
+  }
 
   let records: LoyaltyBalance[];
   try {

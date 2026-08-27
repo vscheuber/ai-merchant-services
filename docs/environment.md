@@ -13,6 +13,15 @@ cp config/payment/aic/.env.example               config/payment/aic/.env
 
 ---
 
+## Merchant definition runtime
+
+| Variable | Description |
+| --- | --- |
+| `MERCHANT_ID` | Canonical merchant definition to run, for example `northwind`. This is the server-side selector and is not replaced by a browser `NEXT_PUBLIC_*` value. |
+| `MERCHANT_CONFIG_DIR` | Read-only root containing `registry.json` and `<merchantId>/definition.json`, `theme.json`, and assets. |
+
+Merchant definitions contain public presentation metadata and non-secret onboarding metadata. OAuth secrets, payment bridge credentials, agent credentials, service-account keys, and passwords remain deployment secrets. See [merchant-onboarding.md](./merchant-onboarding.md).
+
 ## merchant-web
 
 | Variable                        | Description                                                                                                                                                                                                                         |

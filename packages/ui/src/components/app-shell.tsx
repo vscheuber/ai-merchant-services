@@ -10,6 +10,7 @@ export interface AppShellNavItem {
 
 export interface AppShellProps {
   brand: string;
+  logoUrl?: string;
   tagline?: string;
   nav?: readonly AppShellNavItem[];
   actions?: React.ReactNode;
@@ -28,6 +29,7 @@ export interface AppShellProps {
  */
 export function AppShell({
   brand,
+  logoUrl,
   tagline,
   nav,
   actions,
@@ -40,13 +42,25 @@ export function AppShell({
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4">
           <div className="flex items-center gap-6">
-            <div className="flex flex-col leading-tight">
-              <span className="text-base font-semibold tracking-tight">
-                {brand}
-              </span>
-              {tagline ? (
-                <span className="text-xs text-muted-foreground">{tagline}</span>
-              ) : null}
+            <div className="flex items-center gap-2">
+              {logoUrl ? (
+                <img src={logoUrl} alt={`${brand} logo`} className="h-8 w-8 rounded-md object-contain" />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground"
+                >
+                  {brand.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <div className="flex flex-col leading-tight">
+                <span className="text-base font-semibold tracking-tight">
+                  {brand}
+                </span>
+                {tagline ? (
+                  <span className="text-xs text-muted-foreground">{tagline}</span>
+                ) : null}
+              </div>
             </div>
             {nav && nav.length > 0 ? (
               <nav

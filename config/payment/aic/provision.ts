@@ -17,6 +17,7 @@ import type {
   ActionRecord,
   ResourceType,
   RunSummary,
+  ScriptPayload,
 } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -96,6 +97,10 @@ function loadBravoOAuth2Clients(): OAuth2ClientPayload[] {
   return loadRealmJson<OAuth2ClientPayload[]>('bravo', 'oauth2-clients.json');
 }
 
+function loadBravoScripts(): ScriptPayload[] {
+  return loadRealmJson<ScriptPayload[]>('bravo', 'scripts.json');
+}
+
 function loadBravoApplications(): ApplicationPayload[] {
   return loadRealmJson<ApplicationPayload[]>('bravo', 'applications.json');
 }
@@ -173,6 +178,48 @@ type FrodoInstance = ReturnType<typeof frodo.createInstanceWithServiceAccount>;
  * secret (coreOAuth2ClientConfig.userpassword). This lets operators set known
  * secrets via config/payment/aic/.env without committing credentials in JSON files.
  */
+function loadScriptBody(payload: ScriptPayload): string {
+  return readFileSync(join(__dirname, '../../merchant/aic/inputs/bravo', payload.scriptFile), 'utf8');
+}
+
+async function upsertBravoScript(
+  desired: ScriptPayload,
+  instance: FrodoInstance,
+  realm: string,
+  dryRun: boolean,
+): Promise<ActionRecord> {
+  const resourceType = 'Script' as ResourceType;
+  if (dryRun) return { action: 'dry-run', resourceType, realm, id: desired._id };
+  try {
+    const scriptData = {
+      _id: desired._id,
+      name: desired.name,
+      description: desired.description ?? '',
+      default: desired.default,
+      language: desired.language,
+      context: desired.context,
+      evaluatorVersion: desired.evaluatorVersion,
+      // Frodo's script operation performs the required base64 encoding.
+      script: loadScriptBody(desired),
+    } as Parameters<typeof instance.script.updateScript>[1];
+    try {
+      await instance.script.readScript(desired._id);
+    } catch (readError) {
+      if (!hasHttpStatus(readError, 404)) throw readError;
+      await instance.script.createScript(desired._id, desired.name, scriptData);
+      console.log(`[${realm}] Script created: ${desired._id}`);
+      return { action: 'created', resourceType, realm, id: desired._id };
+    }
+    await instance.script.updateScript(desired._id, scriptData);
+    console.log(`[${realm}] Script updated: ${desired._id}`);
+    return { action: 'updated', resourceType, realm, id: desired._id };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[${realm}] Script skipped (${desired._id}): ${msg}`);
+    return { action: 'skipped', resourceType, realm, id: desired._id, error: msg };
+  }
+}
+
 function injectClientSecret(clientId: string, payload: OAuth2ClientPayload): OAuth2ClientPayload {
   const envKey = `OAUTH2_SECRET_${clientId.toUpperCase().replace(/-/g, '_')}`;
   const secret = process.env[envKey];
@@ -1088,6 +1135,7 @@ export async function provision(
   replaceNorthwindChatbotClientOptIn = false,
   provisionMerchantGroups = false,
   retirePocJwtLoginJourneyOptIn = false,
+  selectedMerchantId?: string,
 ): Promise<RunSummary> {
   const { tenantUrl } = config;
 
@@ -1115,14 +1163,27 @@ export async function provision(
   const alphaClients = loadAlphaOAuth2Clients();
   const alphaApplications = loadAlphaApplications();
   const alphaTrustedIssuers = loadAlphaTrustedJwtIssuers();
-  const alphaOrganizations = loadAlphaOrganizations();
+  const alphaOrganizations = loadAlphaOrganizations().filter(
+    (organization) => !selectedMerchantId || organization.merchantId === selectedMerchantId,
+  );
   const merchantTokenLoginJourney = loadAlphaJourneyBundle(MERCHANT_TOKEN_LOGIN_JOURNEY_ID);
   const merchantGroupConfig = loadMerchantGroupConfig();
-  const alphaMerchantGroups = loadAlphaMerchantGroups();
-  validateMerchantGroupDesiredState(merchantGroupConfig, alphaMerchantGroups);
+  const allAlphaMerchantGroups = loadAlphaMerchantGroups();
+  const selectedGroupConfig = selectedMerchantId
+    ? { ...merchantGroupConfig, merchants: merchantGroupConfig.merchants.filter((merchant) => merchant.merchantId === selectedMerchantId) }
+    : merchantGroupConfig;
+  validateMerchantGroupDesiredState(selectedGroupConfig, selectedMerchantId ? allAlphaMerchantGroups.filter((group) => group.name === `${merchantGroupConfig.groupPrefix}-${selectedMerchantId}`) : allAlphaMerchantGroups);
+  const alphaMerchantGroups = selectedMerchantId
+    ? allAlphaMerchantGroups.filter(
+        (group) => group.name === `${merchantGroupConfig.groupPrefix}-${selectedMerchantId}`,
+      )
+    : allAlphaMerchantGroups;
   const bravoClients = loadBravoOAuth2Clients();
+  const bravoScripts = loadBravoScripts();
   const bravoApplications = loadBravoApplications();
-  const bravoUsers = loadBravoUsers();
+  const bravoUsers = loadBravoUsers().filter(
+    (user) => !selectedMerchantId || user.merchantId === selectedMerchantId,
+  );
 
   // Create frodo instances
   const alphaInstance = frodo.createInstanceWithServiceAccount(
@@ -1148,17 +1209,10 @@ export async function provision(
   // BRAVO_USER_DEFAULT_PASSWORD so credentials are not committed in source.
   // Fall back to the built-in default only if the env var is absent, and emit
   // a clear warning so operators know they are using the fallback value.
-  const bravoUserPassword = (() => {
-    const pw = process.env['BRAVO_USER_DEFAULT_PASSWORD'];
-    if (!pw) {
-      console.warn(
-        '[provision] WARNING: BRAVO_USER_DEFAULT_PASSWORD is not set. ' +
-          'Using built-in fallback password for bravo user creation. ' +
-          'Set this env var (see config/payment/aic/.env.example) to avoid credentials in source.',
-      );
-    }
-    return pw ?? 'Br@vo1234!';
-  })();
+  const bravoUserPassword = process.env['BRAVO_USER_DEFAULT_PASSWORD'];
+  if (!dryRun && bravoUsers.length > 0 && !bravoUserPassword) {
+    throw new Error('BRAVO_USER_DEFAULT_PASSWORD is required for live Bravo user provisioning.');
+  }
 
   const actions: ActionRecord[] = [];
 
@@ -1176,9 +1230,9 @@ export async function provision(
       actions.push(await upsertOAuth2Client(id, client, alphaInstance, '/alpha', dryRun));
     }
 
-    // Dry runs display the deterministic replacement plan without tenant
-    // reads or writes.
-    if (dryRun) {
+    // The agent replacement is an explicit migration; do not include it in
+    // ordinary dry-run plans unless the operator requested the flag.
+    if (dryRun && replaceNorthwindChatbotClientOptIn) {
       actions.push(...(await replaceNorthwindChatbotClient(alphaInstance, '/alpha', true)));
     }
   }
@@ -1236,10 +1290,15 @@ export async function provision(
             '/alpha',
             dryRun,
             schemaApproved,
-            merchantGroupConfig,
+            selectedGroupConfig,
           ),
         );
       }
+    }
+
+    // Bravo OIDC Claims scripts must exist before clients reference them.
+    for (const script of bravoScripts) {
+      actions.push(await upsertBravoScript(script, bravoInstance, '/bravo', dryRun));
     }
 
     // Bravo OAuth2Clients
@@ -1262,7 +1321,7 @@ export async function provision(
 
     // Bravo Users
     for (const user of bravoUsers) {
-      actions.push(await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword));
+      actions.push(await upsertBravoUser(user, bravoInstance, '/bravo', dryRun, bravoUserPassword ?? ''));
     }
   }
 
@@ -1299,12 +1358,19 @@ export async function provision(
 
 export const main = async (): Promise<void> => {
   const dryRun = process.argv.includes('--dry-run');
+  const merchantIdArgIndex = process.argv.indexOf('--merchant-id');
+  const selectedMerchantId = merchantIdArgIndex >= 0 ? process.argv[merchantIdArgIndex + 1] : undefined;
+  if (merchantIdArgIndex >= 0 && !selectedMerchantId) throw new Error('--merchant-id requires a value.');
+  if (selectedMerchantId && !/^[a-z][a-z0-9-]*$/.test(selectedMerchantId)) throw new Error('Invalid --merchant-id.');
   const pruneStaleApplications = process.argv.includes('--prune-stale-applications');
   const replaceNorthwindChatbotClient = process.argv.includes('--replace-northwind-chatbot-client');
   const provisionMerchantGroups = process.argv.includes('--provision-merchant-groups');
   const retirePocJwtLoginJourneyOptIn = process.argv.includes(
     '--migrate-merchant-token-login-journey',
   );
+  if (process.argv.includes('--dry-run') === process.argv.includes('--apply')) {
+    throw new Error('Specify exactly one of --dry-run or --apply.');
+  }
   const config = loadConfig();
   await provision(
     config,
@@ -1313,6 +1379,7 @@ export const main = async (): Promise<void> => {
     replaceNorthwindChatbotClient,
     provisionMerchantGroups,
     retirePocJwtLoginJourneyOptIn,
+    selectedMerchantId,
   );
 };
 

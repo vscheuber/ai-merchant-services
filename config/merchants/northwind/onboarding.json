@@ -1,0 +1,9 @@
+{
+  "status": "ready",
+  "merchantId": "northwind",
+  "issuer": "https://idc.mytest.run/am/oauth2/.well-known/openid-configuration",
+  "audienceName": "merchant-bridge",
+  "authorisedParties": ["none", "merchant-bridge"],
+  "redirectUris": ["https://northwind.mytest.run/api/auth/callback/aic"],
+  "notes": "Merchant IDP discovery URL used by the current local AIC desired state."
+}

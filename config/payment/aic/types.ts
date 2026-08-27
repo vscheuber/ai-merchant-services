@@ -35,7 +35,19 @@ export interface OAuth2ClientPayload {
   _id?: string;
   coreOAuth2ClientConfig?: CoreOAuth2ClientConfig;
   advancedOAuth2ClientConfig?: AdvancedOAuth2ClientConfig;
+  overrideOAuth2ClientConfig?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface ScriptPayload {
+  _id: string;
+  name: string;
+  description: string | null;
+  default: boolean;
+  language: 'GROOVY' | 'JAVASCRIPT';
+  context: string;
+  evaluatorVersion?: string;
+  scriptFile: string;
 }
 
 export interface AIAgentIdentityAttributes {
@@ -168,7 +180,8 @@ export type ResourceType =
   | 'MerchantGroup'
   | 'StaleApplication'
   | 'Organization'
-  | 'Journey';
+  | 'Journey'
+  | 'Script';
 
 export interface ActionRecord {
   action: ActionType;

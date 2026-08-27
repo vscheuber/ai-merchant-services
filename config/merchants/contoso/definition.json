@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "contoso",
+  "name": "Contoso Goods",
+  "brand": "Contoso Goods",
+  "tagline": "Everyday goods, thoughtfully chosen",
+  "domains": ["contoso.local"],
+  "assistantName": "Contoso Assistant",
+  "catalogMerchantId": "contoso",
+  "logoAsset": "assets/logo.svg",
+  "onboarding": {
+    "status": "draft",
+    "merchantOidcClientId": "merchant-web-contoso",
+    "callbackPath": "/api/auth/callback/aic"
+  }
+}

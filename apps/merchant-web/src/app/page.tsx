@@ -12,23 +12,9 @@
 
 import Link from 'next/link';
 import type { ProductCategory } from '@acme/shared';
-import {
-  AppShell,
-  buttonVariants,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from '@acme/ui';
+import { buttonVariants, Card, CardHeader, CardTitle, CardDescription, CardContent } from '@acme/ui';
+import { StorefrontShell } from '../components/storefront-shell';
 import { MerchantHeaderActions } from '../components/merchant-header-actions';
-
-const nav = [
-  { label: 'Products', href: '/products' },
-  { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
-  { label: 'Account', href: '/account' },
-] as const;
 
 interface CategoryTile {
   category: ProductCategory;
@@ -66,7 +52,7 @@ const categories: readonly CategoryTile[] = [
 
 export default function Page() {
   return (
-    <AppShell brand="Northwind Retail" tagline="Consumer electronics, made simple" nav={nav} actions={<MerchantHeaderActions />}>
+    <StorefrontShell actions={<MerchantHeaderActions />}>
       <section className="space-y-4">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">
           Fictional demo storefront
@@ -124,6 +110,6 @@ export default function Page() {
           payment still requires an explicit in-chat confirmation.
         </p>
       </section>
-    </AppShell>
+    </StorefrontShell>
   );
 }

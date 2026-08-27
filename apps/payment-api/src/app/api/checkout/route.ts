@@ -92,6 +92,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const merchantId = cart.merchantId;
+  if (!merchantId || typeof merchantId !== 'string') {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'Cart must include a merchantId.' },
+      { status: 400 },
+    );
+  }
 
   // --- Look up products to compute authoritative totalAmount ---
   let products: Product[];
@@ -104,24 +110,43 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const productMap = new Map(products.map((p) => [p.sku, p]));
+  const merchantProducts = products.filter((product) => product.merchantId === merchantId);
+  if (merchantProducts.length === 0) {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'Unknown merchant catalog.' },
+      { status: 400 },
+    );
+  }
+
+  const productMap = new Map(merchantProducts.map((p) => [p.sku, p]));
   let totalAmount = 0;
+  let currency: string | undefined;
   for (const item of cart.items) {
-    const product = productMap.get(item.sku);
-    if (!product) {
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) {
       return NextResponse.json(
-        { error: 'bad_request', message: `Unknown product SKU: ${item.sku}.` },
+        { error: 'bad_request', message: `Invalid quantity for SKU: ${item.sku}.` },
         { status: 400 },
       );
     }
+    const product = productMap.get(item.sku);
+    if (!product) {
+      return NextResponse.json(
+        { error: 'bad_request', message: `Unknown product SKU for merchant: ${item.sku}.` },
+        { status: 400 },
+      );
+    }
+    if (currency && currency !== product.currency) {
+      return NextResponse.json(
+        { error: 'bad_request', message: 'Cart items must use one currency.' },
+        { status: 400 },
+      );
+    }
+    currency = product.currency;
     totalAmount += product.price * item.quantity;
   }
 
   // Use the product's currency; fall back to the cart's declared currency.
-  const currency =
-    (cart.items.length > 0 ? productMap.get(cart.items[0]!.sku)?.currency : undefined) ??
-    cart.currency ??
-    'USD';
+  currency = currency ?? cart.currency ?? 'USD';
 
   // --- Look up merchant name for the denormalized transaction field ---
   let merchants: Merchant[];

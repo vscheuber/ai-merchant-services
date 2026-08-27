@@ -33,6 +33,7 @@ import type {
   TokenTrace,
   TokenTraceStage,
   Product,
+  Merchant,
   LoyaltyBalance,
   WalletCard,
   ProposedPurchase,
@@ -46,8 +47,31 @@ import {
   exchangeMerchantTokenForPaymentToken,
 } from '../../../lib/merchant-bridge';
 
-const NORTHWIND_MERCHANT_ID = 'mrch_northwind';
+const DEFAULT_MERCHANT_ID = 'northwind';
 const DEFAULT_MODEL = 'gpt-4.1-mini';
+
+function buildTrace(
+  traceEnabled: boolean,
+  traceSessionId: string | undefined,
+  requestId: string,
+  stages: readonly TokenTraceStage[],
+): TokenTrace | undefined {
+  if (!traceEnabled || !traceSessionId) return undefined;
+  return {
+    traceSessionId,
+    requestId,
+    source: 'chatbot-agent',
+    capturedAt: new Date().toISOString(),
+    stages,
+  };
+}
+
+function withTrace<T extends object>(
+  response: T,
+  trace: TokenTrace | undefined,
+): T & { trace?: TokenTrace } {
+  return trace ? { ...response, trace } : response;
+}
 
 // Module-level singleton — created once when the env key is present, reused
 // across all requests rather than being re-allocated per request.
@@ -132,6 +156,7 @@ async function exchangeForAgentToken(
   trace?.push({
     name: 'step-2-payment-to-agent',
     status: 'succeeded',
+    tokenRole: 'agent',
     endpoint: tokenEndpoint,
     tokenType: tokenResponse.token_type,
     scope: tokenResponse.scope,
@@ -154,13 +179,13 @@ interface UserContext {
  * Uses the northwind-chatbot-agent token (from Step 2) as the Bearer credential so that
  * the payment-api JWT middleware accepts the request.
  */
-async function fetchUserContext(agentToken: string, userId: string): Promise<UserContext> {
+async function fetchUserContext(agentToken: string, userId: string, merchantId: string): Promise<UserContext> {
   const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(/\/$/, '');
   const authHeaders = { Authorization: `Bearer ${agentToken}` };
 
   const [loyaltyRes, walletRes] = await Promise.all([
     fetch(
-      `${baseUrl}/api/loyalty?userId=${encodeURIComponent(userId)}&merchantId=${NORTHWIND_MERCHANT_ID}`,
+      `${baseUrl}/api/loyalty?userId=${encodeURIComponent(userId)}&merchantId=${merchantId}`,
       { headers: authHeaders },
     ),
     fetch(`${baseUrl}/api/wallet?userId=${encodeURIComponent(userId)}`, {
@@ -185,13 +210,13 @@ async function fetchUserContext(agentToken: string, userId: string): Promise<Use
 // ── System prompt ────────────────────────────────────────────────────────────
 
 /** Build the system prompt for Acme Assist, optionally enriched with shopper context. */
-function buildSystemPrompt(products: Product[], userCtx: UserContext | null): string {
-  const northwindProducts = products.filter((p) => p.merchantId === NORTHWIND_MERCHANT_ID);
+function buildSystemPrompt(products: Product[], userCtx: UserContext | null, merchantId: string, merchantName: string): string {
+  const merchantProducts = products.filter((p) => p.merchantId === merchantId);
 
   const productCatalog =
-    northwindProducts.length === 0
+    merchantProducts.length === 0
       ? '(No products available at this time.)'
-      : northwindProducts
+      : merchantProducts
           .map(
             (p) =>
               `- ${p.name} (SKU: ${p.sku}, Public price: $${p.price.toFixed(2)} ${p.currency}${p.membersOnly && p.memberPrice !== undefined ? `, member price: $${p.memberPrice.toFixed(2)} ${p.currency}` : ''}, Category: ${p.category})${p.description ? `: ${p.description}` : ''}`,
@@ -220,11 +245,11 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null): st
   }
 
   return [
-    'You are the Shopping Assistant, a helpful AI shopping assistant embedded on the Northwind Retail website.',
+    `You are the Shopping Assistant, a helpful AI shopping assistant embedded on the ${merchantName} website.`,
     '',
-    '## Merchant: Northwind Retail',
-    'Northwind Retail is a premium electronics retailer specialising in laptops, smartphones,',
-    'headphones, gaming peripherals, and home electronics.',
+    `## Merchant: ${merchantName}`,
+    `${merchantName} is a retailer offering products from the catalog below.`,
+    'The catalog may include electronics, home goods, or other categories.',
     '',
     '## Available Product Catalog',
     productCatalog,
@@ -233,7 +258,7 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null): st
     shopperSection,
     '',
     '## Instructions',
-    '- Help shoppers discover and evaluate products from the Northwind catalog above.',
+    '- Help shoppers discover and evaluate products from the the merchant catalog above.',
     '- Guest shoppers may browse and ask product questions without signing in.',
     '- Members-only deals require an authenticated shopper session; guests may see the public price but must be told to sign in to unlock the member price.',
     '- Do not propose or complete a purchase without an authenticated shopper session.',
@@ -256,7 +281,7 @@ const PROPOSE_PURCHASE_TOOL: OpenAI.ChatCompletionTool = {
   function: {
     name: 'propose_purchase',
     description:
-      'Propose a specific product from the Northwind catalog for the shopper to purchase. ' +
+      'Propose a specific product from the the merchant catalog for the shopper to purchase. ' +
       'Call this when the shopper has expressed clear intent to buy a specific product and you ' +
       'have confirmed the product name, SKU, and price. The shopper will be shown a ' +
       '"Confirm & pay" button before any charge is made.',
@@ -265,7 +290,7 @@ const PROPOSE_PURCHASE_TOOL: OpenAI.ChatCompletionTool = {
       properties: {
         sku: {
           type: 'string',
-          description: 'Exact product SKU from the Northwind catalog (e.g. NW-LP-14-SILVER).',
+          description: 'Exact product SKU from the the merchant catalog (e.g. NW-LP-14-SILVER).',
         },
         productName: {
           type: 'string',
@@ -288,7 +313,7 @@ const PROPOSE_PURCHASE_TOOL: OpenAI.ChatCompletionTool = {
           type: 'string',
           description:
             'Natural language message summarising the purchase for the shopper to review, ' +
-            'e.g. "I\'ll order 1x Northwind Aero 14 (NW-LP-14-SILVER) for $1,299.00. ' +
+            'e.g. "I\'ll order 1x the merchant Aero 14 (NW-LP-14-SILVER) for $1,299.00. ' +
             'Click Confirm & pay to proceed."',
         },
       },
@@ -357,7 +382,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   const incomingMessages = Array.from(chatRequest.messages ?? []);
   const merchantAuthCode = chatRequest.merchantAuthCode;
   const merchantCodeVerifier = chatRequest.merchantCodeVerifier;
-  const merchantId = chatRequest.merchantId;
+  const merchantId = chatRequest.merchantId ?? DEFAULT_MERCHANT_ID;
+  if (!/^[a-z][a-z0-9-]*$/.test(merchantId)) {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'Invalid merchant identifier.' },
+      { status: 400 },
+    );
+  }
   const confirmedAt = chatRequest.confirmedAt;
   const incomingProposedPurchase = chatRequest.proposedPurchase;
   const traceEnabled = chatRequest.trace === true;
@@ -365,6 +396,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   // second condition for operator demos, but require a server-side gate too.
   const traceRaw =
     chatRequest.traceRaw === true && process.env['AIC_ALLOW_RAW_TOKEN_TRACE'] === 'true';
+  const traceSessionId = chatRequest.traceSessionId;
+  const traceRequestId = crypto.randomUUID();
   const traceStages: TokenTraceStage[] = [];
 
   // ── Step 1: merchant token/code → payment token ──────────────────────────
@@ -474,7 +507,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Only proceed when agentToken is non-null (Step 2 succeeded).
     if (userId && agentToken) {
       try {
-        userCtx = await fetchUserContext(agentToken, userId);
+        userCtx = await fetchUserContext(agentToken, userId, merchantId);
       } catch {
         // Non-fatal: proceed with no shopper context in the system prompt.
       }
@@ -489,10 +522,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (confirmedAt && incomingProposedPurchase) {
     if (!agentToken || !userId) {
+      const loginRequiredTrace = buildTrace(traceEnabled, traceSessionId, traceRequestId, traceStages);
       return NextResponse.json(
         {
           error: 'login_required',
           message: 'Please sign in before confirming a purchase.',
+          ...(loginRequiredTrace ? { trace: loginRequiredTrace } : {}),
         },
         { status: 401 },
       );
@@ -510,13 +545,13 @@ export async function POST(request: Request): Promise<NextResponse> {
         },
         ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
       };
-      return NextResponse.json(noCardMsg);
+      return NextResponse.json(withTrace(noCardMsg, buildTrace(traceEnabled, traceSessionId, traceRequestId, traceStages)));
     }
 
     const cart: Cart = {
       id: `cart_${Date.now()}`,
       userId,
-      merchantId: NORTHWIND_MERCHANT_ID,
+      merchantId,
       currency: incomingProposedPurchase.currency,
       items: [
         {
@@ -582,16 +617,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       checkoutResultContent = `Payment could not be processed: ${message}.`;
     }
 
+    const checkoutTrace = buildTrace(traceEnabled, traceSessionId, traceRequestId, traceStages);
     const checkoutResponse: ChatResponse = {
       message: { role: 'assistant', content: checkoutResultContent },
       ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
+      ...(checkoutTrace ? { trace: checkoutTrace } : {}),
     };
     return NextResponse.json(checkoutResponse);
   }
 
   // ── Normal chat path (LLM call) ───────────────────────────────────────────
 
-  // Load the Northwind product catalog for the system prompt.
+  // Load the the merchant product catalog for the system prompt.
   // A read failure degrades gracefully — the prompt will note no products.
   let products: Product[] = [];
   try {
@@ -600,7 +637,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Intentionally swallowed: system prompt handles the empty-catalog case.
   }
 
-  const systemPrompt = buildSystemPrompt(products, userCtx);
+  let merchantName = merchantId;
+  try {
+    const merchants = await readJson<Merchant[]>(dataFilePath('merchants'));
+    merchantName = merchants.find((merchant) => merchant.id === merchantId)?.brand ?? merchantId;
+  } catch {
+    // Keep the canonical id in the prompt if display metadata is unavailable.
+  }
+  const systemPrompt = buildSystemPrompt(products, userCtx, merchantId, merchantName);
 
   // Build the OpenAI messages array. The system prompt is always injected first
   // so the LLM has merchant identity and product context on every call.
@@ -663,19 +707,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     content: assistantContent,
   };
 
+  const responseTrace = buildTrace(traceEnabled, traceSessionId, traceRequestId, traceStages);
   const response: ChatResponse = {
     message: responseMessage,
     ...(proposedPurchaseOut !== undefined ? { proposedPurchase: proposedPurchaseOut } : {}),
     ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
-    ...(traceEnabled
-      ? {
-          trace: {
-            requestId: crypto.randomUUID(),
-            capturedAt: new Date().toISOString(),
-            stages: traceStages,
-          } satisfies TokenTrace,
-        }
-      : {}),
+    ...(responseTrace ? { trace: responseTrace } : {}),
   };
 
   return NextResponse.json(response);

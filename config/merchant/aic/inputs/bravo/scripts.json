@@ -1,0 +1,12 @@
+[
+  {
+    "_id": "5290d218-03ae-4dd3-8a9e-45afacd822c8",
+    "name": "POC Bravo OIDC Claims",
+    "description": null,
+    "default": false,
+    "language": "JAVASCRIPT",
+    "context": "OIDC_CLAIMS",
+    "evaluatorVersion": "1.0",
+    "scriptFile": "scripts/5290d218-03ae-4dd3-8a9e-45afacd822c8.script.js"
+  }
+]

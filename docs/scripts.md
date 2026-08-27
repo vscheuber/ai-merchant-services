@@ -56,6 +56,21 @@ Service status:
 
 ---
 
+## Merchant definition generator
+
+### `pnpm merchant:create` → `scripts/create-merchant.mjs`
+
+Creates a local merchant definition under `config/merchants/<id>/`. Interactive prompts collect the canonical ID, brand, tagline, domain, assistant name, theme primary color, and optional logo. Use `--non-interactive` with `--id`, `--brand`, `--tagline`, and `--domain` for automation.
+
+```bash
+pnpm merchant:create -- --dry-run
+pnpm merchant:create -- --non-interactive --id contoso --brand "Contoso Goods" \
+  --tagline "Everyday goods, thoughtfully chosen" --domain contoso.mytest.run \
+  --logo ./assets/contoso-mark.svg --dry-run
+```
+
+`--dry-run` performs no writes. The generator refuses existing targets unless `--force` is provided, validates IDs/domains/colors/logo paths, and never calls the live identity provider, creates credentials, edits `.env.local`, or changes DNS/Caddy. It is a scaffolding step only; complete `onboarding.json`, review the generated files, and run the AIC provisioner dry-run separately. See [merchant-onboarding.md](./merchant-onboarding.md).
+
 ## AIC provisioner
 
 ### `pnpm --filter @acme/aic-config provision`
@@ -121,6 +136,12 @@ Unlike the Northwind chatbot migration, `Organization` and `Journey` desired sta
 ```bash
 pnpm --filter @acme/aic-config provision -- --dry-run   # shows Organization[northwind], Journey[merchant-token-login]
 pnpm --filter @acme/aic-config provision                # upserts both, along with everything else
+```
+
+Use `--merchant-id <id>` to restrict organization, group, and demo-user actions to one merchant during review. This does not mutate the tenant during dry-run:
+
+```bash
+pnpm --filter @acme/aic-config provision -- --dry-run --merchant-id contoso
 ```
 
 `merchant-token-login` was cloned from an earlier proof-of-concept journey named `poc-jwt-login` (fresh node/inner-node UUIDs via one-time `--re-uuid`, never repeated) and verified live before being adopted as desired state. The old journey is retired via a separate, explicitly opt-in one-time flag — dormant by default, and only meant to run after the new journey has been verified end-to-end in production use:

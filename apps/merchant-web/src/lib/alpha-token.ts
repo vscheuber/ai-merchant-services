@@ -35,6 +35,7 @@ function normalizeIssuer(issuer: string): string {
   }
   return issuer;
 }
+import { appendMerchantTokenTrace, getMerchantTokenTrace } from './token-trace-store';
 import type {
   TokenExchangeRequest,
   TokenExchangeResponse,
@@ -42,9 +43,11 @@ import type {
   TokenTraceStage,
 } from '@acme/shared';
 
-type TokenTraceOptions = {
+export type TokenTraceOptions = {
   enabled?: boolean;
   rawTokens?: boolean;
+  traceSessionId?: string;
+  requestId?: string;
   onTrace?: (trace: TokenTrace) => void;
 };
 
@@ -53,20 +56,20 @@ function rawTokenTraceAllowed(): boolean {
   return process.env['AIC_ALLOW_RAW_TOKEN_TRACE'] === 'true';
 }
 
-let lastTokenTrace: TokenTrace | null = null;
-
 function publishTrace(stages: TokenTraceStage[], options: TokenTraceOptions): void {
-  if (!options.enabled || !options.onTrace) return;
+  if (!options.enabled || !options.traceSessionId) return;
   const trace: TokenTrace = {
-    requestId: crypto.randomUUID(),
+    traceSessionId: options.traceSessionId,
+    requestId: options.requestId ?? crypto.randomUUID(),
+    source: 'merchant-web-token-exchange',
     capturedAt: new Date().toISOString(),
     stages: [...stages],
   };
-  lastTokenTrace = trace;
-  options.onTrace(trace);
+  const persisted = appendMerchantTokenTrace(trace);
+  options.onTrace?.(persisted);
 }
 
-function decodeJwtClaims(token: string): Record<string, unknown> | undefined {
+export function decodeJwtClaims(token: string): Record<string, unknown> | undefined {
   const payload = token.split('.')[1];
   if (!payload) return undefined;
   try {
@@ -212,6 +215,7 @@ async function getServiceAccountToken(trace?: TokenTraceStage[]): Promise<string
   trace?.push({
     name: 'payment-service-token',
     status: 'succeeded',
+    tokenRole: 'service',
     endpoint: tokenEndpoint,
     httpStatus: response.status,
     tokenType: data.token_type,
@@ -256,8 +260,11 @@ function assertPaymentUserRecord(
   }
 }
 
-function getPaymentMerchantId(): string {
-  const merchantId = process.env['PAYMENT_MERCHANT_ID'] ?? 'northwind';
+function getPaymentMerchantId(configuredMerchantId?: string): string {
+  const merchantId = configuredMerchantId ?? process.env['PAYMENT_MERCHANT_ID'];
+  if (!merchantId) {
+    throw new Error('A configured payment merchant identifier is required.');
+  }
   if (!/^[a-z][a-z0-9-]*$/.test(merchantId)) {
     throw new Error('PAYMENT_MERCHANT_ID must be a lowercase merchant identifier.');
   }
@@ -324,6 +331,7 @@ async function findPaymentUser(
   trace?.push({
     name: 'idm-lookup',
     status: response.ok ? 'succeeded' : 'failed',
+    tokenRole: 'service',
     endpoint,
     httpStatus: response.status,
     tokenType: 'Bearer service token',
@@ -384,6 +392,7 @@ async function createPaymentUser(
   trace?.push({
     name: 'idm-jit-provision',
     status: response.ok ? 'succeeded' : response.status === 409 ? 'reconciled' : 'failed',
+    tokenRole: 'service',
     endpoint,
     httpStatus: response.status,
     tokenType: 'Bearer service token',
@@ -463,9 +472,10 @@ async function exchangeMerchantForPaymentToken(
 
   const data = (await response.json()) as TokenExchangeResponse;
   trace?.push({
-    name: 'step-1-merchant-to-payment',
+    name: 'payment-user-token',
     status: 'succeeded',
     endpoint: tokenEndpoint,
+    tokenRole: 'payment-user',
     httpStatus: response.status,
     tokenType: data.token_type,
     scope: data.scope,
@@ -495,19 +505,21 @@ export async function getPaymentTokenDiagnostics(
   merchantToken: string,
   sessionUser?: { name?: string | null; email?: string | null } | null,
   traceOptions?: TokenTraceOptions,
+  configuredMerchantId?: string,
 ): Promise<string> {
   const trace: TokenTraceStage[] = [];
   const traceEnabled = traceOptions?.enabled === true;
   // Never expose the service-account token in a trace. Raw caller-token tracing is
   // restricted to an operator-enabled server environment in addition to opt-in.
   const traceRaw = traceOptions?.rawTokens === true && rawTokenTraceAllowed();
-  const publish = () => publishTrace(trace, traceOptions ?? {});
+  const publish = () => publishTrace(trace, { ...traceOptions, onTrace: traceOptions?.onTrace ?? (() => undefined) });
 
   if (traceEnabled) {
     trace.push({
-      name: 'merchant-token',
+      name: 'merchant-user-token',
       status: 'started',
       tokenType: 'Bearer access token',
+      tokenRole: 'merchant-user',
       rawToken: traceRaw ? merchantToken : undefined,
     });
   }
@@ -525,7 +537,7 @@ export async function getPaymentTokenDiagnostics(
     const message = err instanceof Error ? err.message : 'Merchant JWT verification failed.';
     if (traceEnabled) {
       trace[0] = {
-        name: 'merchant-token',
+        name: 'merchant-user-token',
         status: 'failed',
         tokenType: 'Bearer access token',
         rawToken: traceRaw ? merchantToken : undefined,
@@ -541,7 +553,7 @@ export async function getPaymentTokenDiagnostics(
   if (!merchantCustomerId) {
     throw new Error('Merchant JWT is missing the sub claim.');
   }
-  const merchantId = getPaymentMerchantId();
+  const merchantId = getPaymentMerchantId(configuredMerchantId);
   const identityAttributes = getPaymentIdentityAttributes();
 
   // Extract user claims for JIT provisioning, falling back to session user data.
@@ -568,18 +580,31 @@ export async function getPaymentTokenDiagnostics(
 
   if (traceEnabled) {
     trace[0] = {
-      name: 'merchant-token',
+      name: 'merchant-user-token',
       status: 'succeeded',
       tokenType: 'Bearer access token',
+      tokenRole: 'merchant-user',
       rawToken: traceRaw ? merchantToken : undefined,
       claims: decodeJwtClaims(merchantToken),
     };
   }
 
-  // The custom properties are currently absent from the live schema. Keep the
-  // explicit gate in place so this implementation cannot attempt a record write
-  // until the approved schema contract is enabled in the runtime environment.
-  assertMerchantSchemaWriteGate(identityAttributes);
+  // The custom properties are schema-gated. Publish the verified merchant-user
+  // trace even when the local operator gate blocks downstream provisioning.
+  try {
+    assertMerchantSchemaWriteGate(identityAttributes);
+  } catch (error) {
+    if (traceEnabled) {
+      trace.push({
+        name: 'merchant-user-token-gate',
+        status: 'failed',
+        tokenRole: 'merchant-user',
+        message: error instanceof Error ? error.message : 'Merchant schema gate blocked provisioning',
+      });
+      publish();
+    }
+    throw error;
+  }
 
   // 2. Obtain a service-account payment token for IDM operations.
   let serviceToken: string;
@@ -657,6 +682,6 @@ export async function getPaymentTokenDiagnostics(
 
 export const getPaymentToken = getPaymentTokenDiagnostics;
 
-export function getLastTokenTrace(): TokenTrace | null {
-  return lastTokenTrace;
+export function getLastTokenTrace(traceSessionId?: string): TokenTrace | null {
+  return traceSessionId ? getMerchantTokenTrace(traceSessionId) : null;
 }

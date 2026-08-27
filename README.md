@@ -4,7 +4,7 @@ A demonstration of **agentic commerce**: Acme Payments sells merchants a turnkey
 
 Identity is cloud IDP end-to-end: the merchant IDP (bravo realm) holds shopper accounts; the payment provider IDP (alpha realm) holds payment identities; cross-realm federation uses OAuth 2.0 token exchange (RFC 8693).
 
-> **New here?** See [docs/getting-started.md](./docs/getting-started.md) for the first-run walkthrough and IDP setup requirements.
+> **New here?** See [docs/getting-started.md](./docs/getting-started.md) for the first-run walkthrough and IDP setup requirements. To add a merchant, follow [docs/merchant-onboarding.md](./docs/merchant-onboarding.md) and run `pnpm merchant:create`.
 
 ---
 
@@ -154,8 +154,9 @@ See [docs/environment.md](./docs/environment.md) for complete per-variable descr
 - **`apps/`** — the five Next.js 15 apps (App Router). Each has its own `package.json`, `tsconfig.json`, `.env.example`, and `src/app/` tree.
 - **`packages/`** — `shared` (types + data helpers) and `ui` (component library).
 - **`data/`** — JSON seed data: merchants, products, users, wallet cards, transactions, loyalty balances.
+- **`config/merchants/`** — external merchant definitions, themes, assets, and non-secret onboarding metadata consumed by the shared storefront runtime.
 - **`config/payment/aic/`** — declarative desired-state for the AIC provisioner. `inputs/tenant.json` holds the tenant URL and service-account env var names. `config/payment/aic/inputs/alpha/` holds payment-provider resources; `config/merchant/aic/inputs/bravo/` holds merchant resources (OAuth2 clients, applications, social IDPs, journeys). `provision.ts` is the entry point.
-- **`docs/`** — reference documentation: [architecture.md](./docs/architecture.md), [identity.md](./docs/identity.md), [scripts.md](./docs/scripts.md), [environment.md](./docs/environment.md), [getting-started.md](./docs/getting-started.md).
+- **`docs/`** — reference documentation: [architecture.md](./docs/architecture.md), [identity.md](./docs/identity.md), [scripts.md](./docs/scripts.md), [environment.md](./docs/environment.md), [getting-started.md](./docs/getting-started.md), [merchant-onboarding.md](./docs/merchant-onboarding.md).
 - **`scripts/`** — `dev-start.sh`, `dev-stop.sh`, `dev-status.sh`.
 - **`logs/`** — per-service log files (gitignored; populated when services start).
 

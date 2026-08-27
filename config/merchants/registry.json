@@ -1,0 +1,14 @@
+[
+  {
+    "id": "northwind",
+    "enabled": true,
+    "definition": "northwind/definition.json",
+    "theme": "northwind/theme.json"
+  },
+  {
+    "id": "contoso",
+    "enabled": false,
+    "definition": "contoso/definition.json",
+    "theme": "contoso/theme.json"
+  }
+]

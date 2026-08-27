@@ -2,6 +2,8 @@
 
 ## Overview
 
+The storefront runtime is maintained once in `apps/merchant-web`. Merchant-specific brand, theme, catalog, domains, and non-secret onboarding metadata live under `config/merchants/<merchantId>/`. A deployment selects one definition with `MERCHANT_ID` and `MERCHANT_CONFIG_DIR`, so application fixes are inherited without copying the Next.js source. Identity-provider credentials and payment-agent privileges remain deployment-specific.
+
 Three parties participate in every interaction:
 
 1. **Consumer** — an authenticated shopper on the merchant's site interacting with the Acme Assist chat overlay.
