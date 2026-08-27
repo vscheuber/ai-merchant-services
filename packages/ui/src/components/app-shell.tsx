@@ -44,7 +44,7 @@ export function AppShell({
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               {logoUrl ? (
-                <img src={logoUrl} alt={`${brand} logo`} className="h-8 w-8 rounded-md object-contain" />
+                <img src={logoUrl} alt={`${brand} logo`} className="h-10 w-10 rounded-md object-contain" />
               ) : (
                 <span
                   aria-hidden="true"

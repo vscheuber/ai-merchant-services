@@ -73,6 +73,17 @@ function withTrace<T extends object>(
   return trace ? { ...response, trace } : response;
 }
 
+function firstNameForUser(userId: string | null, merchantId: string): string | undefined {
+  if (!userId) return undefined;
+  const knownUsers: Record<string, { givenName?: string; merchantId?: string }> = {
+    user_ada: { givenName: 'Ada', merchantId: 'northwind' },
+    user_grace: { givenName: 'Grace', merchantId: 'northwind' },
+    user_alan: { givenName: 'Alan', merchantId: 'contoso' },
+  };
+  const user = knownUsers[userId];
+  return user?.merchantId === merchantId ? user.givenName : undefined;
+}
+
 // Module-level singleton — created once when the env key is present, reused
 // across all requests rather than being re-allocated per request.
 // The POST handler's early guard ensures the client is only used when the key
@@ -514,6 +525,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
+  const identity = {
+    authenticated: Boolean(paymentToken && userId),
+    ...(firstNameForUser(userId, merchantId) ? { firstName: firstNameForUser(userId, merchantId) } : {}),
+  };
+
   // ── Checkout confirmation path ────────────────────────────────────────────
   //
   // When the client sends `confirmedAt` + `proposedPurchase`, the shopper has
@@ -527,6 +543,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         {
           error: 'login_required',
           message: 'Please sign in before confirming a purchase.',
+          identity: { authenticated: false },
           ...(loginRequiredTrace ? { trace: loginRequiredTrace } : {}),
         },
         { status: 401 },
@@ -544,6 +561,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             'Please add a card to your Acme Payments account and try again.',
         },
         ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
+        identity,
       };
       return NextResponse.json(withTrace(noCardMsg, buildTrace(traceEnabled, traceSessionId, traceRequestId, traceStages)));
     }
@@ -621,6 +639,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const checkoutResponse: ChatResponse = {
       message: { role: 'assistant', content: checkoutResultContent },
       ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
+      identity,
       ...(checkoutTrace ? { trace: checkoutTrace } : {}),
     };
     return NextResponse.json(checkoutResponse);
@@ -712,6 +731,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     message: responseMessage,
     ...(proposedPurchaseOut !== undefined ? { proposedPurchase: proposedPurchaseOut } : {}),
     ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
+    identity,
     ...(responseTrace ? { trace: responseTrace } : {}),
   };
 

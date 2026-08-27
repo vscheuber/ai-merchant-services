@@ -3,6 +3,7 @@
 // tsconfig.base.json paths) rather than reaching into `@acme/ui/src/*` paths.
 
 export { cn } from './lib/cn';
+export { Check, ShoppingCart } from 'lucide-react';
 
 export { Button, buttonVariants, type ButtonProps } from './components/button';
 export {

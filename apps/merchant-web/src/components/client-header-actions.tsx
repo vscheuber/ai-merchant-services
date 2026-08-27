@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { signOut, useSession } from 'next-auth/react'
+import { CartHeaderAction } from './cart-header-action'
 
 function firstName(name: string | null | undefined): string {
   const value = name?.trim()
@@ -14,6 +15,7 @@ export function ClientHeaderActions() {
 
   return (
     <div className="flex items-center gap-3">
+      <CartHeaderAction />
       <button
         type="button"
         className="text-sm text-muted-foreground transition-colors hover:text-foreground"

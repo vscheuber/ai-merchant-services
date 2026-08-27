@@ -74,6 +74,11 @@
   var SSO_POPUP_TIMEOUT_MS = 4000;
   var traceEnabled = false;
   var traceRaw = false;
+  var hostAuthState = { status: 'anonymous' };
+  var confirmedIdentity = { authenticated: false };
+  var authAckShown = false;
+  var authRequestEvent = 'chatbot:auth-request';
+  var authStateEvent = 'chatbot:auth-state';
   var traceSessionId = null;
 
   function newTraceSessionId() {
@@ -125,6 +130,23 @@
       // Storage may be unavailable in a restrictive embed context.
     }
   });
+  window.addEventListener(authStateEvent, function (event) {
+    var detail = event && event.detail;
+    if (!detail || detail.source !== 'merchant-web') return;
+    hostAuthState = {
+      status: detail.status === 'authenticated' ? 'authenticated' : 'anonymous',
+      firstName: typeof detail.firstName === 'string' ? detail.firstName.trim().slice(0, 80) : undefined,
+    };
+    if (hostAuthState.status === 'anonymous') {
+      merchantToken = null;
+      merchantAuthCode = null;
+      merchantCodeVerifier = null;
+      guestSession = true;
+      confirmedIdentity = { authenticated: false };
+      pendingProposedPurchase = null;
+    }
+  });
+  window.dispatchEvent(new CustomEvent(authRequestEvent, { detail: { source: 'chatbot-agent' } }));
   window.dispatchEvent(new CustomEvent('chatbot:trace-settings-ready'));
 
   // ── Module-level state ─────────────────────────────────────────────────────
@@ -469,11 +491,30 @@
       merchantAuthCode = null;
       merchantCodeVerifier = null;
     }
+    if (data && data.identity) {
+      var identity = data.identity;
+      if (identity.authenticated && !confirmedIdentity.authenticated && !authAckShown) {
+        authAckShown = true;
+        var name = identity.firstName || hostAuthState.firstName;
+        appendBubble(
+          'assistant',
+          name
+            ? 'Welcome back, ' + name + '. I can now use your loyalty details and saved cards.'
+            : 'Welcome back. I can now use your loyalty details and saved cards.',
+        );
+      }
+      confirmedIdentity = {
+        authenticated: Boolean(identity.authenticated),
+        firstName: typeof identity.firstName === 'string' ? identity.firstName : undefined,
+      };
+    }
   }
 
   /** Remove the readonly guard from the textarea once an async operation completes. */
   function reenableInput() {
-    if (activeTextarea && hasMerchantCredential()) {
+    // Guests may continue chatting after silent SSO falls back; only payment
+    // confirmation requires a merchant credential.
+    if (activeTextarea && (hasMerchantCredential() || ssoAttempted)) {
       activeTextarea.removeAttribute('readonly');
     }
   }
@@ -788,6 +829,7 @@
    * are updated here so that async callbacks always target the live panel.
    */
   function build(open) {
+    window.dispatchEvent(new CustomEvent(authRequestEvent, { detail: { source: 'chatbot-agent' } }));
     var root = h('div', { id: MOUNT_ID, 'data-acme-assist': 'overlay', style: containerStyle });
 
     if (!open) {
@@ -812,14 +854,11 @@
 
     // ── Message list ──────────────────────────────────────────────────────────
     // Always starts with the welcome bubble; history is replayed beneath it.
-    var listEl = h('ol', { style: listStyle }, [
-      bubble(
-        'assistant',
-        "Hi! I'm your " +
-          CHATBOT_NAME +
-          '. I can help you find products, check your loyalty balance, and complete purchases with your saved cards.',
-      ),
-    ]);
+    var greetingName = confirmedIdentity.firstName || hostAuthState.firstName;
+    var greeting = greetingName
+      ? 'Hi ' + greetingName + '! I\'m your ' + CHATBOT_NAME + '. I can help with products, loyalty, and purchases.'
+      : "Hi! I'm your " + CHATBOT_NAME + ". I can help you find products, check your loyalty balance, and complete purchases with your saved cards.";
+    var listEl = h('ol', { style: listStyle }, [bubble('assistant', greeting)]);
     activeBubbleList = listEl;
 
     // Replay stored conversation into the freshly built list.

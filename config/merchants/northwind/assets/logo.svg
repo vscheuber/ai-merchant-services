@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title desc">
+  <title id="title">Northwind Retail</title>
+  <desc id="desc">Circular mark: geometric N with a north-pointing arrow. Consumer electronics, made simple.</desc>
+
+  <!-- Square 1:1 canvas, transparent background. Mark inset ~10%. -->
+  <circle cx="128" cy="128" r="102" fill="#0B2A40"/>
+  <circle cx="128" cy="128" r="93" fill="none" stroke="#3EC8E6" stroke-width="4"/>
+
+  <!-- Geometric N -->
+  <g fill="#F3FAFD">
+    <rect x="84" y="88" width="26" height="90" rx="2"/>
+    <rect x="146" y="102" width="26" height="76" rx="2"/>
+    <polygon points="110,88 134,88 172,178 146,178"/>
+  </g>
+
+  <!-- North arrow built onto the right stem -->
+  <polygon fill="#3EC8E6" points="159,50 184,102 134,102"/>
+</svg>

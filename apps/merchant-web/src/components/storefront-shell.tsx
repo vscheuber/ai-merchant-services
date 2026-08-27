@@ -8,7 +8,6 @@ import { useMerchantConfig } from './merchant-config-provider';
 const nav = [
   { label: 'Products', href: '/products' },
   { label: 'Cart', href: '/cart' },
-  { label: 'Checkout', href: '/checkout' },
   { label: 'Account', href: '/account' },
 ] as const;
 

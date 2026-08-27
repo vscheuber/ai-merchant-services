@@ -28,6 +28,8 @@ import { SessionProvider } from 'next-auth/react';
 import { CartProvider } from '../components/cart-provider';
 import { MerchantConfigProvider } from '../components/merchant-config-provider';
 import { TokenTracePanel } from '../components/token-trace-panel';
+import { Toaster } from '@acme/ui';
+import { ChatbotAuthBridge } from '../components/chatbot-auth-bridge';
 import { themeCssVariables } from '../config/merchant';
 import { loadMerchantConfig } from '../lib/merchant-config';
 import { auth } from '../auth';
@@ -67,6 +69,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <style dangerouslySetInnerHTML={{ __html: themeCssVariables(merchantConfig) }} />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <SessionProvider refetchOnWindowFocus refetchInterval={300}>
+            <ChatbotAuthBridge />
             <MerchantConfigProvider config={merchantConfig}>
               <CartProvider merchantId={merchantConfig.merchantId}>
                 <div className="merchant-theme">{children}</div>
@@ -94,6 +97,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
         {/* Shopping assistant overlay — served by chatbot-agent. */}
         <script src={CHATBOT_EMBED_URL} async />
+        <Toaster position="bottom-right" containerAriaLabel="Shopping notifications" />
         <TokenTracePanel />
       </body>
     </html>
