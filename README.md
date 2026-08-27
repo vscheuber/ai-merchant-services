@@ -17,20 +17,22 @@ Identity is cloud IDP end-to-end: the merchant IDP (bravo realm) holds shopper a
 # Install all workspace dependencies
 pnpm install
 
+# Start Caddy for the HTTPS/path-routed demo
+pnpm caddy:start
+
 # Start all five dev servers in the background
 pnpm dev:start
+pnpm dev:status
+pnpm caddy:status
 ```
 
-Open http://localhost:3000 to see Northwind Retail with the Acme Assist chat overlay in the bottom-right corner.
+Open https://northwind.mytest.run to see Northwind Retail with the Acme Assist chat overlay in the bottom-right corner. Caddy is required for the standard demo because it provides HTTPS and path-based routing. Direct localhost ports are available only for limited app-only development.
 
-To start individual services:
+To start or inspect one managed application, use the lifecycle controller rather than `pnpm --filter <app> dev`:
 
 ```bash
-pnpm --filter merchant-web dev        # http://localhost:3000
-pnpm --filter payment-user-web dev    # http://localhost:3001
-pnpm --filter payment-admin-web dev   # http://localhost:3002
-pnpm --filter payment-api dev         # http://localhost:3003
-pnpm --filter chatbot-agent dev       # http://localhost:3004
+pnpm dev:start -- --service merchant-web
+pnpm dev:status -- --service merchant-web
 ```
 
 ---
@@ -38,13 +40,18 @@ pnpm --filter chatbot-agent dev       # http://localhost:3004
 ## Service management
 
 ```bash
-pnpm dev:start   # Start all five apps (skips any port already occupied)
-pnpm dev:stop    # Stop all five apps
-pnpm dev:status  # Show live/down status, PID, and URL for each service
+pnpm dev:start                    # Start all five apps and wait for readiness
+pnpm dev:status                   # Strict ownership and HTTP readiness check
+pnpm dev:restart                  # Stop, clean .next caches, and restart
+pnpm dev:restart -- --preserve-next # Fast restart without removing .next
+pnpm dev:stop                     # Stop all five apps
+pnpm caddy:start                  # Start repository-owned Caddy
+pnpm caddy:status                 # Check repository-owned Caddy
+pnpm caddy:reload                 # Validate and reload Caddyfile
+pnpm caddy:stop                   # Stop repository-owned Caddy
 ```
 
-Scripts live in `scripts/`. Each started service tails to `logs/<app>.log`.
-See [docs/getting-started.md](./docs/getting-started.md) for troubleshooting.
+Scripts live in `scripts/`. Each started service appends stdout and stderr to `logs/<app>.log`; tail those files separately when diagnosing a service. See [docs/getting-started.md](./docs/getting-started.md) for troubleshooting.
 
 ---
 
@@ -119,7 +126,7 @@ AIC provisioning (creates/updates IDP resources against a live Ping AIC tenant):
 # Preview plan without making any API calls
 pnpm --filter @acme/aic-config provision -- --dry-run
 
-# Apply (requires AIC_ADMIN_SVC_ACCOUNT_ID + AIC_ADMIN_SVC_ACCOUNT_KEY)
+# Apply (requires a saved Frodo connection profile and BRAVO_USER_DEFAULT_PASSWORD)
 pnpm --filter @acme/aic-config provision
 ```
 
@@ -142,7 +149,7 @@ Each app under `apps/` has a `.env.example` listing the vars it reads at runtime
 | `CHATBOT_AGENT_CLIENT_ID` / `_SECRET` + `AIC_ALPHA_TOKEN_ENDPOINT`                    | `chatbot-agent`                                                          | Step 2 alpha user token→Northwind Shopping Assistant token exchange (`northwind-chatbot-agent`) |
 | `NEXT_PUBLIC_CHATBOT_EMBED_URL`                                                       | `merchant-web`                                                           | Configurable overlay URL (defaults to `http://localhost:3004/embed.js`)                         |
 | `OPENAI_API_KEY` / `OPENAI_MODEL`                                                     | `chatbot-agent`                                                          | Live LLM responses in `POST /api/chat`                                                          |
-| `AIC_ADMIN_SVC_ACCOUNT_ID` / `AIC_ADMIN_SVC_ACCOUNT_KEY`                              | `payment-api`, `chatbot-agent`, provisioner                              | AIC provisioner (tenant URL is read from `config/payment/aic/inputs/tenant.json`)               |
+| Frodo connection profile (`~/.frodo/Connections.json`)                                 | provisioner                                                               | AIC service-account authentication                                          |
 | `BRAVO_USER_DEFAULT_PASSWORD`                                                         | provisioner                                                              | Initial password for demo merchant IDP users                                                    |
 
 See [docs/environment.md](./docs/environment.md) for complete per-variable descriptions.
@@ -157,7 +164,7 @@ See [docs/environment.md](./docs/environment.md) for complete per-variable descr
 - **`config/merchants/`** — external merchant definitions, themes, assets, and non-secret onboarding metadata consumed by the shared storefront runtime.
 - **`config/payment/aic/`** — declarative desired-state for the AIC provisioner. `inputs/tenant.json` holds the tenant URL and service-account env var names. `config/payment/aic/inputs/alpha/` holds payment-provider resources; `config/merchant/aic/inputs/bravo/` holds merchant resources (OAuth2 clients, applications, social IDPs, journeys). `provision.ts` is the entry point.
 - **`docs/`** — reference documentation: [architecture.md](./docs/architecture.md), [identity.md](./docs/identity.md), [scripts.md](./docs/scripts.md), [environment.md](./docs/environment.md), [getting-started.md](./docs/getting-started.md), [merchant-onboarding.md](./docs/merchant-onboarding.md).
-- **`scripts/`** — `dev-start.sh`, `dev-stop.sh`, `dev-status.sh`.
+- **`scripts/`** — managed app lifecycle wrappers, Caddy lifecycle controller, and merchant tooling.
 - **`logs/`** — per-service log files (gitignored; populated when services start).
 
 ---

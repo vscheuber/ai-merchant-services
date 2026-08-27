@@ -30,8 +30,13 @@ This guide covers everything you need to run the project locally, configure the 
 # 1. Install all workspace dependencies
 pnpm install
 
-# 2. Start all five dev servers in the background
+# 2. Start Caddy for the standard HTTPS/path-routed demo
+pnpm caddy:start
+
+# 3. Start all five dev servers in the background
 pnpm dev:start
+pnpm dev:status
+pnpm caddy:status
 ```
 
 Open these URLs once the services are running:
@@ -54,13 +59,19 @@ Open these URLs once the services are running:
 
 ## Managing services
 
+Use the managed lifecycle commands; do not start individual apps with `pnpm --filter <app> dev`, because that bypasses ownership tracking.
+
 ```bash
-pnpm dev:start    # Start all five apps (skips any already running)
-pnpm dev:stop     # Stop all five apps
-pnpm dev:status   # Show UP/DOWN status with PID and URL for each service
+pnpm dev:start                     # Start all five apps and wait for readiness
+pnpm dev:status                    # Strict ownership and HTTP readiness check
+pnpm dev:restart                   # Stop, clean .next caches, and restart
+pnpm dev:restart -- --preserve-next # Fast restart without removing .next
+pnpm dev:stop                      # Stop all five apps
 ```
 
-Logs are written to `logs/<app>.log` for services started via `pnpm dev:start`:
+For one app, add `--service <name>` to the lifecycle command. A foreign listener on a configured port causes a safe failure; do not kill it with a broad `lsof` command. Verify ownership first and use the lifecycle controller's explicit force recovery only when appropriate.
+
+Logs are appended to `logs/<app>.log` for services started via `pnpm dev:start`; tail them separately:
 
 ```bash
 tail -f logs/merchant-web.log
@@ -116,6 +127,8 @@ pnpm --filter @acme/aic-config provision
 
 The provisioner authenticates using the frodo connection profile stored in `~/.frodo/Connections.json` — no `AIC_ADMIN_SVC_ACCOUNT_ID` or `AIC_ADMIN_SVC_ACCOUNT_KEY` env vars are required.
 
+For the standard public demo, Caddy must also be running because it provides HTTPS and the `/admin`, `/api`, and `/chatbot` path routing. Start it with `pnpm caddy:start` and verify it with `pnpm caddy:status`. If Caddy was started manually with this repository's `Caddyfile`, the pnpm commands safely adopt it and repair stale state. Direct localhost ports are only a limited app-only mode.
+
 ### Merchant IDP (bravo realm)
 
 The merchant IDP must have:
@@ -170,11 +183,7 @@ pnpm format         # Prettier --check
 
 **Port already in use on start**
 
-`pnpm dev:start` skips any service whose port is already occupied. If a stale process from a previous session is not tracked by a PID file:
-
-```bash
-lsof -ti tcp:3000 | xargs kill   # replace 3000 with the affected port
-```
+`pnpm dev:start` fails safely when a configured port is occupied by a foreign or unmanaged process. Use `pnpm dev:status` to identify the listener and verify ownership before taking any recovery action. Do not use a broad `lsof | kill` command.
 
 **Wrong Node version**
 
@@ -191,6 +200,8 @@ corepack prepare pnpm@9.15.4 --activate
 ```
 
 **Services started but pages show errors**
+
+Run `pnpm dev:restart` to stop the managed stack, clear stale `.next` artifacts, and restart with readiness checks. Caddy is separate; run `pnpm caddy:status` when the HTTPS demo URL is unavailable.
 
 Check the relevant log file:
 

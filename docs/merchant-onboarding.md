@@ -20,15 +20,15 @@ The canonical merchant ID is the same value used in merchant and payment-provide
 
 `definition.json` owns brand, tagline, domains, assistant name, catalog scope, and onboarding status. `theme.json` owns light/dark semantic tokens, radius, and font settings. `onboarding.json` contains non-secret issuer, audience, client, and callback metadata. Never store OAuth secrets, service-account keys, passwords, or bridge credentials in these files.
 
-Run the shared runtime with a selected definition:
+Run the shared runtime with a selected definition through the managed lifecycle controller:
 
 ```bash
 MERCHANT_ID=northwind \
 MERCHANT_CONFIG_DIR="$PWD/config/merchants" \
-pnpm --filter merchant-web dev
+pnpm dev:start -- --service merchant-web
 ```
 
-The current migration keeps Northwind's existing static configuration as the runtime fallback. The external loader migration will make `MERCHANT_ID` and `MERCHANT_CONFIG_DIR` authoritative and remove the fallback.
+After changing the selected definition, use `pnpm dev:restart -- --service merchant-web` so the managed process is stopped, its Next.js cache is cleaned, and readiness is verified.
 
 ## Brand assets
 
