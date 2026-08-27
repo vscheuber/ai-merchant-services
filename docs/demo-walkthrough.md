@@ -6,14 +6,14 @@ A step-by-step guide for demonstrating the full Acme Payments + Northwind Retail
 
 ## Prerequisites
 
-All five services must be running and Caddy must be active before starting:
+Caddy is required for this walkthrough because it provides the HTTPS termination and path-based routing used by the public URLs. Start and verify the repository-owned Caddy instance, then start and verify the five applications:
 
 ```bash
 # From repo root
-pnpm dev:start      # starts all five apps
-pnpm dev:status     # confirm all show UP
-
-caddy reload --config Caddyfile   # (or: sudo caddy start --config Caddyfile on first run)
+pnpm caddy:start
+pnpm dev:start
+pnpm dev:status
+pnpm caddy:status
 ```
 
 ---
@@ -150,11 +150,26 @@ tail -f logs/chatbot-agent.log logs/payment-api.log
 ## Stopping Services
 
 ```bash
-pnpm dev:stop       # stops all five Next.js processes
-caddy stop          # stops Caddy (or: sudo caddy stop)
+pnpm dev:stop
+pnpm caddy:stop
 ```
 
 ---
+
+## Updating the demo
+
+After application source or dependency changes, use the clean managed restart:
+
+```bash
+pnpm dev:restart
+pnpm caddy:status
+```
+
+After changing `Caddyfile`, reload the repository-owned proxy:
+
+```bash
+pnpm caddy:reload
+```
 
 ## Key Configuration Files
 

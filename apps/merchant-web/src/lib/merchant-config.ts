@@ -86,7 +86,7 @@ export async function loadMerchantConfig(): Promise<MerchantStorefrontConfig> {
   if (!/^[\w\s,.-]+$/.test(theme.fontFamily)) throw new Error('Theme fontFamily contains unsupported characters.');
 
   const logoUrl = definition.logoAsset
-    ? `/merchant-assets/${encodeURIComponent(merchantId)}/${encodeURIComponent(definition.logoAsset.split('/').pop() ?? '')}`
+    ? `/api/merchant-assets/${encodeURIComponent(merchantId)}/${encodeURIComponent(definition.logoAsset.split('/').pop() ?? '')}`
     : undefined;
   return {
     merchantId,

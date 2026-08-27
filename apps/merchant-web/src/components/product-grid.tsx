@@ -8,7 +8,10 @@
 // Uses useCart() from CartProvider (wired in the root layout). Clicking
 // "Add to cart" increments the cart state and persists it to localStorage.
 
+import { useEffect, useState } from 'react'
 import type { Product } from '@acme/shared'
+import { Check } from '@acme/ui'
+import { useRouter } from 'next/navigation'
 import {
   Button,
   Card,
@@ -17,6 +20,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  toast,
 } from '@acme/ui'
 import { useCart } from './cart-provider'
 
@@ -33,7 +37,33 @@ interface ProductGridProps {
 }
 
 export function ProductGrid({ products, isMember }: ProductGridProps) {
-  const { addItem } = useCart()
+  const router = useRouter()
+  const { addItem, items } = useCart()
+  const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!recentlyAddedId) return
+    const timeout = window.setTimeout(() => setRecentlyAddedId(null), 1800)
+    return () => window.clearTimeout(timeout)
+  }, [recentlyAddedId])
+
+  function addProduct(product: Product) {
+    addItem(product)
+    setRecentlyAddedId(product.id)
+    const quantity = (items.find((item) => item.product.id === product.id)?.quantity ?? 0) + 1
+    toast.success(`${product.name} added to cart`, {
+      description: `${quantity} currently in your cart.`,
+      duration: 6000,
+      action: {
+        label: 'Go to cart',
+        onClick: () => router.push('/cart'),
+      },
+      cancel: {
+        label: 'Continue shopping',
+        onClick: () => undefined,
+      },
+    })
+  }
 
   if (products.length === 0) {
     return <p className="text-sm text-muted-foreground">No products available.</p>
@@ -80,13 +110,21 @@ export function ProductGrid({ products, isMember }: ProductGridProps) {
               ) : null}
               <div className="flex w-full items-center justify-between">
                 <span className="text-xs text-muted-foreground">SKU {product.sku}</span>
-                <Button
-                  size="sm"
-                  onClick={() => addItem(product)}
-                  disabled={product.membersOnly && !isMember}
-                >
-                  {product.membersOnly && !isMember ? 'Sign in to buy' : 'Add to cart'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {recentlyAddedId === product.id ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700" role="status">
+                      <Check aria-hidden="true" className="h-4 w-4" />
+                      Added
+                    </span>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    onClick={() => addProduct(product)}
+                    disabled={product.membersOnly && !isMember}
+                  >
+                    {product.membersOnly && !isMember ? 'Sign in to buy' : 'Add to cart'}
+                  </Button>
+                </div>
               </div>
             </CardFooter>
           </Card>

@@ -2,57 +2,33 @@
 
 ## Dev lifecycle scripts
 
-Three shell scripts in `scripts/` manage the dev server lifecycle. They are wired to pnpm commands at the repo root.
+Four shell wrappers in `scripts/` manage the five application services. They are wired to root pnpm commands and delegate to the managed lifecycle controller in `scripts/dev-process.mjs`.
 
-### `pnpm dev:start` → `scripts/dev-start.sh`
-
-Starts all five apps as background processes.
-
-- Runs `nohup pnpm --filter <pkg> dev` for each app.
-- Writes each process's PID to `scripts/pids/<pkg>.pid` so `dev-stop.sh` can kill it later.
-- Checks whether each port is already occupied (via `lsof -ti tcp:<port>`). If a process is already listening, that app is skipped with a message — no duplicate starts.
-- Appends stdout and stderr to `logs/<pkg>.log`. The `logs/` directory is created automatically; log files are gitignored.
-
-After all apps start:
+### Recommended application workflow
 
 ```bash
 pnpm dev:start
-# Starting Acme Payments / Northwind Retail dev servers...
-#   Northwind Retail (merchant-web)       — started (PID 12345) → http://localhost:3000  |  logs/merchant-web.log
-#   ...
-# Run 'pnpm dev:status' to check service health.
+pnpm dev:status
+pnpm dev:restart
+pnpm dev:stop
 ```
 
-To tail a log while a service is running:
+`pnpm dev:restart` is the reliable post-change command: it stops the selected services, confirms their listeners are gone, removes their `.next` build/cache artifacts, and starts them again with route-aware readiness checks. Use `pnpm dev:restart -- --preserve-next` only when a cache-preserving restart is specifically wanted.
 
-```bash
-tail -f logs/merchant-web.log
-tail -f logs/chatbot-agent.log
-```
+### Start and stop behavior
 
-### `pnpm dev:stop` → `scripts/dev-stop.sh`
+- `dev-start.sh`, `dev-stop.sh`, `dev-status.sh`, and `dev-restart.sh` are the four wrappers.
+- Each service has ignored JSON state under `scripts/pids/<service>.json`; state records the managed process and start metadata.
+- Start fails rather than skipping a configured port occupied by a foreign or unmanaged process.
+- Stop validates ownership and refuses to kill an unrelated listener. Do not use a broad `lsof | kill` command.
+- `--service <name>` limits start, stop, status, or restart to one managed application.
+- Logs append stdout and stderr to `logs/<service>.log`; tail those files separately.
 
-Stops all five apps.
+### `pnpm dev:status`
 
-1. Reads `scripts/pids/<pkg>.pid` and sends `SIGTERM` to the recorded PID.
-2. If the PID file is absent or the recorded process is no longer alive, falls back to `lsof -ti tcp:<port>` to find and kill whatever is listening on that port.
-3. If nothing is listening on the port, prints `not running on :<port>`.
+Status is strict by default and exits nonzero if any selected service is down, foreign/stale, or fails its route-aware HTTP readiness probe. It reports `OWNED`, `FOREIGN/STALE`, or `DOWN` with port and HTTP status. Use `--non-strict` only for a diagnostic report that should not fail its caller.
 
-### `pnpm dev:status` → `scripts/dev-status.sh`
-
-Reports the live/down status of each service.
-
-- Uses `lsof -ti tcp:<port>` to determine whether anything is listening.
-- Prints `UP` or `DOWN` with PID and URL for each app.
-- If `DOWN` but a stale PID file exists, notes the stale PID alongside the status.
-
-```
-Service status:
-
-  UP      Northwind Retail (merchant-web)       PID 12345  →  http://localhost:3000
-  UP      Acme Payments consumer (payment-user-web)  PID 12346  →  http://localhost:3001
-  DOWN    Acme Payments API     (payment-api)        nothing listening on :3003
-```
+Readiness probes are defined in `scripts/dev-services.json`; they include `/api/health` for `payment-api`, `/admin/` for `payment-admin-web`, and `/chatbot/` for `chatbot-agent`.
 
 ---
 
@@ -70,6 +46,21 @@ pnpm merchant:create -- --non-interactive --id contoso --brand "Contoso Goods" \
 ```
 
 `--dry-run` performs no writes. The generator refuses existing targets unless `--force` is provided, validates IDs/domains/colors/logo paths, and never calls the live identity provider, creates credentials, edits `.env.local`, or changes DNS/Caddy. It is a scaffolding step only; complete `onboarding.json`, review the generated files, and run the AIC provisioner dry-run separately. See [merchant-onboarding.md](./merchant-onboarding.md).
+
+## AIC provisioner
+
+## Caddy lifecycle
+
+Caddy is required for the standard HTTPS/path-routed demo and is managed separately from the five application services.
+
+```bash
+pnpm caddy:start
+pnpm caddy:status
+pnpm caddy:reload
+pnpm caddy:stop
+```
+
+The controller validates `Caddyfile` with the `caddyfile` adapter and uses repository-local state under `.caddy-data/`. If a matching Caddy process was started manually with this repository's `Caddyfile`, `pnpm caddy:status` and `pnpm caddy:start` safely adopt it and repair stale state. They never adopt or stop an unrelated Caddy process. Direct localhost app ports are available for limited app-only development, but they do not reproduce the public demo routing.
 
 ## AIC provisioner
 

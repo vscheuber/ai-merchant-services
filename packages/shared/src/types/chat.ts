@@ -91,6 +91,11 @@ export interface ChatRequest {
  * `proposedPurchase` is present when the LLM has identified a specific
  * product the shopper can purchase and is awaiting confirmation.
  */
+export interface ChatIdentity {
+  authenticated: boolean;
+  firstName?: string;
+}
+
 export interface ChatResponse {
   /** The assistant turn to append to the conversation. */
   message: ChatMessage;
@@ -110,4 +115,6 @@ export interface ChatResponse {
   merchantToken?: string;
   /** Token-exchange diagnostics returned only when requested by the demo UI. */
   trace?: import('./token-trace').TokenTrace;
+  /** Server-authoritative identity state for the completed chatbot request. */
+  identity?: ChatIdentity;
 }

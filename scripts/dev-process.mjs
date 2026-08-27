@@ -12,10 +12,11 @@ const LOCK_DIR = join(PID_DIR, '.lifecycle.lock');
 const SERVICES = JSON.parse(readFileSync(join(ROOT, 'scripts', 'dev-services.json'), 'utf8')).services;
 
 function parseArgs(argv) {
-  const options = { cleanNext: false, timeout: 60, freshLogs: false, caddyValidate: false, caddyReload: false, force: false, service: null };
+  const options = { cleanNext: true, preserveNext: false, timeout: 60, freshLogs: false, caddyValidate: false, caddyReload: false, force: false, nonStrict: false, service: null };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--clean-next' || arg === '--clean') options.cleanNext = true;
+    else if (arg === '--preserve-next') { options.preserveNext = true; options.cleanNext = false; }
     else if (arg === '--fresh-logs' || arg === '--rotate-logs') options.freshLogs = true;
     else if (arg === '--caddy-validate' || arg === '--caddy') options.caddyValidate = true;
     else if (arg === '--caddy-reload') options.caddyReload = true;
@@ -23,6 +24,7 @@ function parseArgs(argv) {
     else if (arg === '--no-wait') options.timeout = 0;
     else if (arg === '--timeout') options.timeout = Number(argv[++i]);
     else if (arg === '--service') options.service = argv[++i];
+    else if (arg === '--non-strict') options.nonStrict = true;
   }
   if (!Number.isFinite(options.timeout) || options.timeout < 0) throw new Error('--timeout must be a non-negative number.');
   if (options.service && !SERVICES.some((service) => service.name === options.service)) throw new Error(`Unknown service: ${options.service}`);
@@ -244,7 +246,7 @@ async function main() {
       if (options.freshLogs) rotateLogs(services);
       await startServices(services, options);
       await caddy(options);
-    } else if (command === 'status') await statusServices(services, argv.includes('--strict'));
+    } else if (command === 'status') await statusServices(services, !options.nonStrict);
     else if (command === 'health') await statusServices(services, true);
     else throw new Error(`Unknown lifecycle command: ${command}`);
   } finally { release(); }

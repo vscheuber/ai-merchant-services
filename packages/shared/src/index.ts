@@ -22,7 +22,7 @@ export type { LoyaltyBalance, LoyaltyTier } from './types/loyalty';
 export { deriveLoyaltyTier } from './types/loyalty';
 export type { MerchantIdentity, PaymentIdentity } from './types/identity';
 export type { CheckoutSession, CheckoutSessionStatus } from './types/checkout';
-export type { ChatMessage, ChatRequest, ChatResponse, ProposedPurchase } from './types/chat';
+export type { ChatIdentity, ChatMessage, ChatRequest, ChatResponse, ProposedPurchase } from './types/chat';
 export type {
   TokenExchangeRequest,
   TokenExchangeResponse,

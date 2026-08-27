@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { auth, signOut } from '../auth'
 
 import { ChatbotLauncherBtn } from './chatbot-launcher-btn'
+import { CartHeaderAction } from './cart-header-action'
 
 export async function MerchantHeaderActions() {
   const session = await auth()
@@ -9,6 +10,7 @@ export async function MerchantHeaderActions() {
 
   return (
     <div className="flex items-center gap-3">
+      <CartHeaderAction />
       <ChatbotLauncherBtn />
       {session?.accessToken ? (
         <details className="relative">
