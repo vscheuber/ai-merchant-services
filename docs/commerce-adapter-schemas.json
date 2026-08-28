@@ -1,0 +1,2144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "merchant-commerce-adapter/v1/commerce-adapter-schemas.json",
+  "title": "Merchant Commerce Adapter v1 schemas",
+  "description": "Complete normative JSON Schema 2020-12 definitions for the platform-neutral merchant commerce adapter contract. The OpenAPI document references these local definitions.",
+  "$defs": {
+    "ResourceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Opaque merchant-native identifier meaningful only within the authenticated merchant scope."
+    },
+    "Currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "Uppercase ISO 4217 currency code."
+    },
+    "ContractVersion": {
+      "const": "merchant-commerce-adapter/v1"
+    },
+    "CorrelationId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "IdempotencyKey": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 256
+    },
+    "Version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "DateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "Money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amountMinor", "currency", "scale"],
+      "properties": {
+        "amountMinor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "$ref": "#/$defs/Currency"
+        },
+        "scale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        }
+      },
+      "description": "Integer minor-unit money resolved by the merchant; never a client authority."
+    },
+    "SubjectContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["providerSubject", "agentId"],
+      "properties": {
+        "providerSubject": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "merchantCustomerRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "agentId": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "uniqueItems": true,
+          "maxItems": 100
+        }
+      },
+      "description": "Server-derived identity and delegation context. It is not browser-supplied authority."
+    },
+    "ExtensionMap": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^x-[a-z0-9][a-z0-9.-]*$"
+      },
+      "additionalProperties": true,
+      "description": "Optional namespaced extension members. Generic consumers must not require them."
+    },
+    "LineIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productRef", "quantity"],
+      "properties": {
+        "productRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "variantRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "selectedOptionRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResourceRef"
+          },
+          "uniqueItems": true,
+          "maxItems": 100
+        }
+      }
+    },
+    "ResolvedLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lineRef",
+        "productRef",
+        "quantity",
+        "title",
+        "unitPrice",
+        "availability",
+        "resolvedAt"
+      ],
+      "properties": {
+        "lineRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "productRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "variantRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "unitPrice": {
+          "$ref": "#/$defs/Money"
+        },
+        "availability": {
+          "type": "string",
+          "enum": ["available", "limited", "unavailable", "unknown"]
+        },
+        "resolvedAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "ResponseMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["merchantId", "correlationId", "operationId", "contractVersion", "observedAt"],
+      "properties": {
+        "merchantId": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "idempotencyKey": {
+          "$ref": "#/$defs/IdempotencyKey"
+        },
+        "contractVersion": {
+          "$ref": "#/$defs/ContractVersion"
+        },
+        "adapterProfile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "observedAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "sourceVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "accepted",
+        "running",
+        "requires_action",
+        "pending",
+        "unknown",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "AdapterResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {},
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "CapabilityName": {
+      "type": "string",
+      "enum": [
+        "capability.discovery",
+        "catalog.search",
+        "catalog.product",
+        "catalog.availability",
+        "commerce.quote",
+        "customer.lookup",
+        "loyalty.lookup",
+        "cart.create",
+        "cart.read",
+        "cart.update",
+        "cart.validate",
+        "cart.reconcile",
+        "cart.expire",
+        "checkout.create",
+        "checkout.redirect",
+        "checkout.read",
+        "checkout.cancel",
+        "payment.authorize",
+        "payment.capture",
+        "order.create",
+        "order.confirm",
+        "order.read",
+        "order.cancel",
+        "fulfillment.status",
+        "operation.status",
+        "events.webhook"
+      ]
+    },
+    "CapabilityEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "mode"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["supported", "limited", "unsupported"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["sync", "async", "none"]
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "uniqueItems": true
+        },
+        "maxTtlSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxPageSize": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "optimisticConcurrency": {
+          "type": "boolean"
+        },
+        "singleUse": {
+          "type": "boolean"
+        },
+        "supportedPaymentMethods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "uniqueItems": true
+        },
+        "requiresSubject": {
+          "type": "boolean"
+        },
+        "constraints": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "CapabilityMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "merchantId",
+        "correlationId",
+        "operationId",
+        "contractVersion",
+        "observedAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "merchantId": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "contractVersion": {
+          "$ref": "#/$defs/ContractVersion"
+        },
+        "adapterProfile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "observedAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/DateTime"
+        }
+      }
+    },
+    "CapabilityDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "adapter", "capabilities", "limits"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/CapabilityMeta"
+        },
+        "adapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["adapterId", "displayName", "profile", "profileStatus", "connectorVersion"],
+          "properties": {
+            "adapterId": {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "profile": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "profileStatus": {
+              "type": "string",
+              "enum": ["stable", "beta", "deprecated"]
+            },
+            "connectorVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capability.discovery",
+            "catalog.search",
+            "catalog.product",
+            "catalog.availability",
+            "commerce.quote",
+            "customer.lookup",
+            "loyalty.lookup",
+            "cart.create",
+            "cart.read",
+            "cart.update",
+            "cart.validate",
+            "cart.reconcile",
+            "cart.expire",
+            "checkout.create",
+            "checkout.redirect",
+            "checkout.read",
+            "checkout.cancel",
+            "payment.authorize",
+            "payment.capture",
+            "order.create",
+            "order.confirm",
+            "order.read",
+            "order.cancel",
+            "fulfillment.status",
+            "operation.status",
+            "events.webhook"
+          ],
+          "properties": {
+            "capability.discovery": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "catalog.search": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "catalog.product": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "catalog.availability": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "commerce.quote": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "customer.lookup": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "loyalty.lookup": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "cart.create": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "cart.read": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "cart.update": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "cart.validate": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "cart.reconcile": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "cart.expire": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "checkout.create": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "checkout.read": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "checkout.cancel": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "payment.authorize": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "payment.capture": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "order.create": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "order.confirm": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "order.read": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "order.cancel": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "fulfillment.status": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "operation.status": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "events.webhook": {
+              "$ref": "#/$defs/CapabilityEntry"
+            },
+            "checkout.redirect": {
+              "$ref": "#/$defs/CapabilityEntry"
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxPageSize", "maxRequestBytes", "defaultTimeoutMs"],
+          "properties": {
+            "maxPageSize": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxRequestBytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "defaultTimeoutMs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxTimeoutMs": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "supportedLocales": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 35
+          },
+          "uniqueItems": true
+        },
+        "supportedCurrencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Currency"
+          },
+          "uniqueItems": true
+        },
+        "webhook": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eventTypes", "signatureProfile", "replayWindowSeconds"],
+          "properties": {
+            "eventTypes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "uniqueItems": true
+            },
+            "signatureProfile": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "replayWindowSeconds": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "SearchCatalogRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "filters": {
+          "$ref": "#/$defs/ExtensionMap"
+        },
+        "locale": {
+          "type": "string",
+          "maxLength": 35
+        },
+        "currency": {
+          "$ref": "#/$defs/Currency"
+        },
+        "channel": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "pageToken": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      }
+    },
+    "ProductSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productRef", "title", "availability"],
+      "properties": {
+        "productRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "variantRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResourceRef"
+          },
+          "uniqueItems": true
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "availability": {
+          "type": "string",
+          "enum": ["available", "limited", "unavailable", "unknown"]
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "SearchCatalogData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "hasMore"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProductSummary"
+          },
+          "maxItems": 1000
+        },
+        "nextPageToken": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "hasMore": {
+          "type": "boolean"
+        }
+      }
+    },
+    "GetProductRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "locale": {
+          "type": "string",
+          "maxLength": 35
+        },
+        "currency": {
+          "$ref": "#/$defs/Currency"
+        }
+      }
+    },
+    "ProductData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productRef", "title", "availability", "resolvedAt"],
+      "properties": {
+        "productRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "variantRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResourceRef"
+          },
+          "uniqueItems": true
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "availability": {
+          "type": "string",
+          "enum": ["available", "limited", "unavailable", "unknown"]
+        },
+        "resolvedAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "CheckAvailabilityRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines"],
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LineIntent"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "channel": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "AvailabilityData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "resolvedAt"],
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedLine"
+          },
+          "maxItems": 100
+        },
+        "sourceVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "resolvedAt": {
+          "$ref": "#/$defs/DateTime"
+        }
+      }
+    },
+    "QuoteCartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines"],
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LineIntent"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "shippingContext": {
+          "$ref": "#/$defs/ExtensionMap"
+        },
+        "currency": {
+          "$ref": "#/$defs/Currency"
+        },
+        "channel": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "QuoteData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quoteRef", "lines", "total", "sourceVersion", "expiresAt"],
+      "properties": {
+        "quoteRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedLine"
+          },
+          "maxItems": 100
+        },
+        "subtotal": {
+          "$ref": "#/$defs/Money"
+        },
+        "discount": {
+          "$ref": "#/$defs/Money"
+        },
+        "tax": {
+          "$ref": "#/$defs/Money"
+        },
+        "shipping": {
+          "$ref": "#/$defs/Money"
+        },
+        "total": {
+          "$ref": "#/$defs/Money"
+        },
+        "deliveryEstimate": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "sourceVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "deltas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        }
+      }
+    },
+    "CustomerRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "uniqueItems": true,
+          "maxItems": 50
+        }
+      }
+    },
+    "CustomerData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customerRef"],
+      "properties": {
+        "customerRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "locale": {
+          "type": "string",
+          "maxLength": 35
+        },
+        "fields": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "LoyaltyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "uniqueItems": true,
+          "maxItems": 50
+        }
+      }
+    },
+    "LoyaltyData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customerRef"],
+      "properties": {
+        "customerRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "tier": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "availablePoints": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "eligibleBenefits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "maxItems": 100
+        }
+      }
+    },
+    "CreateCartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "lines"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LineIntent"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "shippingContext": {
+          "$ref": "#/$defs/ExtensionMap"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "quoteRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "UpdateCartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "lines"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LineIntent"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "shippingContext": {
+          "$ref": "#/$defs/ExtensionMap"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "quoteRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "ValidateCartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "shippingContext": {
+          "$ref": "#/$defs/ExtensionMap"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "ReconcileCartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "lines"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LineIntent"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "shippingContext": {
+          "$ref": "#/$defs/ExtensionMap"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "quoteRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "ExpireCartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "CartData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cartRef", "lines", "status", "version"],
+      "properties": {
+        "cartRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedLine"
+          },
+          "maxItems": 100
+        },
+        "subtotal": {
+          "$ref": "#/$defs/Money"
+        },
+        "discount": {
+          "$ref": "#/$defs/Money"
+        },
+        "tax": {
+          "$ref": "#/$defs/Money"
+        },
+        "shipping": {
+          "$ref": "#/$defs/Money"
+        },
+        "total": {
+          "$ref": "#/$defs/Money"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "expired", "invalid", "unknown"]
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        },
+        "sourceVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        }
+      }
+    },
+    "CreateCheckoutSessionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "cartRef", "modePreference"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "cartRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "quoteRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "modePreference": {
+          "type": "string",
+          "enum": ["in_chat", "redirect", "either"]
+        },
+        "consentRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "extensions": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "CancelCheckoutSessionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "CheckoutData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkoutRef", "cartRef", "mode", "status", "version", "expiresAt"],
+      "properties": {
+        "checkoutRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "cartRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["in_chat", "redirect", "unsupported"]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "created",
+            "pending",
+            "requires_action",
+            "completed",
+            "cancelled",
+            "expired",
+            "unknown"
+          ]
+        },
+        "paymentMethods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "uniqueItems": true
+        },
+        "redirectUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 4096
+        },
+        "continuationId": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/DateTime"
+        }
+      }
+    },
+    "AuthorizePaymentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "paymentReference", "consentRef"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "paymentReference": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "consentRef": {
+          "$ref": "#/$defs/ResourceRef"
+        }
+      }
+    },
+    "CapturePaymentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "paymentReference"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "paymentReference": {
+          "$ref": "#/$defs/ResourceRef"
+        }
+      }
+    },
+    "PaymentData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paymentRef", "status"],
+      "properties": {
+        "paymentRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "requires_action",
+            "authorized",
+            "captured",
+            "declined",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        "amount": {
+          "$ref": "#/$defs/Money"
+        },
+        "challengeUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 4096
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/DateTime"
+        }
+      }
+    },
+    "CreateOrderRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "checkoutRef", "paymentReference"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "checkoutRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "paymentReference": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "ConfirmOrderRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "paymentReference"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "paymentReference": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "CancelOrderRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/SubjectContext"
+        },
+        "expectedVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "OrderData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderRef", "status", "version"],
+      "properties": {
+        "orderRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "cancelled", "unknown"]
+        },
+        "paymentRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "total": {
+          "$ref": "#/$defs/Money"
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        },
+        "receiptUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 4096
+        }
+      }
+    },
+    "FulfillmentData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderRef", "status", "version"],
+      "properties": {
+        "orderRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "processing",
+            "partially_shipped",
+            "shipped",
+            "delivered",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        "tracking": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["carrier", "trackingRef"],
+            "properties": {
+              "carrier": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "trackingRef": {
+                "$ref": "#/$defs/ResourceRef"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 4096
+              }
+            }
+          },
+          "maxItems": 100
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "OperationData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "status", "operationType"],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "operationType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "resourceRef": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "reconciliationUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 4096
+        }
+      }
+    },
+    "Problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "title", "status", "code", "category", "retryable", "correlationId"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "instance": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "correlationId": {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "currentVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "retryAfter": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "details": {
+          "$ref": "#/$defs/ExtensionMap"
+        }
+      }
+    },
+    "CloudEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specversion",
+        "id",
+        "source",
+        "type",
+        "subject",
+        "time",
+        "datacontenttype",
+        "merchantid",
+        "contractversion",
+        "data"
+      ],
+      "properties": {
+        "specversion": {
+          "const": "1.0"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "source": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "time": {
+          "$ref": "#/$defs/DateTime"
+        },
+        "datacontenttype": {
+          "const": "application/json"
+        },
+        "dataschema": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "merchantid": {
+          "$ref": "#/$defs/ResourceRef"
+        },
+        "contractversion": {
+          "$ref": "#/$defs/ContractVersion"
+        },
+        "correlationid": {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        "operationid": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "dataversion": {
+          "$ref": "#/$defs/Version"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "description": "Structured CloudEvents v1.0.2 representation. CloudEvents requires specversion, id, source, and type; this contract additionally requires subject, time, datacontenttype, merchantid, contractversion, and data."
+    },
+    "WebhookAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "source", "status"],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "source": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "status": {
+          "type": "string",
+          "enum": ["accepted", "duplicate", "rejected"]
+        }
+      }
+    },
+    "WebhookRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event"],
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/CloudEvent"
+        }
+      }
+    },
+    "SearchCatalogResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/SearchCatalogData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for searchCatalog; data is the normalized SearchCatalogData model."
+    },
+    "GetProductResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/ProductData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getProduct; data is the normalized ProductData model."
+    },
+    "CheckAvailabilityResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/AvailabilityData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for checkAvailability; data is the normalized AvailabilityData model."
+    },
+    "QuoteCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/QuoteData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for quoteCart; data is the normalized QuoteData model."
+    },
+    "GetCustomerResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CustomerData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getCustomer; data is the normalized CustomerData model."
+    },
+    "GetLoyaltyResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/LoyaltyData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getLoyalty; data is the normalized LoyaltyData model."
+    },
+    "CreateCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CartData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for createCart; data is the normalized CartData model."
+    },
+    "GetCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CartData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getCart; data is the normalized CartData model."
+    },
+    "UpdateCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CartData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for updateCart; data is the normalized CartData model."
+    },
+    "ValidateCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CartData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for validateCart; data is the normalized CartData model."
+    },
+    "ReconcileCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CartData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for reconcileCart; data is the normalized CartData model."
+    },
+    "ExpireCartResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CartData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for expireCart; data is the normalized CartData model."
+    },
+    "CreateCheckoutSessionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CheckoutData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for createCheckoutSession; data is the normalized CheckoutData model."
+    },
+    "GetCheckoutSessionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CheckoutData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getCheckoutSession; data is the normalized CheckoutData model."
+    },
+    "CancelCheckoutSessionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/CheckoutData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for cancelCheckoutSession; data is the normalized CheckoutData model."
+    },
+    "AuthorizePaymentResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/PaymentData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for authorizePayment; data is the normalized PaymentData model."
+    },
+    "CapturePaymentResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/PaymentData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for capturePayment; data is the normalized PaymentData model."
+    },
+    "CreateOrderResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/OrderData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for createOrder; data is the normalized OrderData model."
+    },
+    "ConfirmOrderResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/OrderData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for confirmOrder; data is the normalized OrderData model."
+    },
+    "GetOrderResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/OrderData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getOrder; data is the normalized OrderData model."
+    },
+    "CancelOrderResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/OrderData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for cancelOrder; data is the normalized OrderData model."
+    },
+    "GetFulfillmentStatusResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/FulfillmentData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getFulfillmentStatus; data is the normalized FulfillmentData model."
+    },
+    "GetOperationStatusResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "status", "data"],
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/ResponseMeta"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "data": {
+          "$ref": "#/$defs/OperationData"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "description": "Common response envelope for getOperationStatus; data is the normalized OperationData model."
+    }
+  },
+  "$ref": "#/$defs/AdapterResponse"
+}

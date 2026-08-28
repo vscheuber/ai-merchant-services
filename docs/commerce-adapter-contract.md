@@ -33,17 +33,17 @@ This document distinguishes three things that must not be conflated:
 
 ### 1.1 Standards profile
 
-| Area                                      | Contract rule                                                                                                                                                                                                                                | Status                                                                       |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| HTTP requests and responses               | Use HTTP semantics, status codes, headers, content negotiation, conditional requests, and `Retry-After` as defined by HTTP Semantics ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)).                                                   | Normative core                                                               |
-| Structured failures                       | Use `application/problem+json` and the Problem Details members defined by [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html), with the stable error extensions in this document.                                                        | Normative core                                                               |
-| API description                           | Publish an OpenAPI 3.1.1 description. OpenAPI 3.1 uses JSON Schema semantics for schemas; the contract schemas use JSON Schema 2020-12-compatible constructs.                                                                                | Normative core                                                               |
-| Data schemas                              | Validate requests and responses against the published JSON Schemas. Unknown `x-` extension members may be ignored; unknown required core members are a contract-version error.                                                               | Normative core                                                               |
-| Event envelope                            | Use CloudEvents v1.0.2 required context attributes for normalized merchant events. CloudEvents identifies an event; it does not itself provide authentication, retries, ordering, or delivery guarantees.                                    | Normative core                                                               |
-| Webhook authentication                    | Verify the merchant's configured native signature, or use an approved HTTP Message Signature profile ([RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html)) when native signing is unavailable.                                           | Normative core                                                               |
-| OAuth/mTLS credentials                    | Use an approved server-to-server OAuth profile or mTLS profile. OAuth scopes, resource/audience restriction, token exchange, and sender-constrained artifacts are deployment security profiles and are not replaced by this commerce schema. | Normative integration requirement; deployment profile selected at onboarding |
-| Async event documentation                 | AsyncAPI MAY describe deployment channels in addition to CloudEvents. It does not replace the CloudEvents envelope or the delivery rules here.                                                                                               | Optional                                                                     |
-| Shopify-, SAP-, and Oracle-style mappings | These may be published as `*.beta` connector profiles. They are examples of adapter translation, not certification, support claims, or normative vendor API shapes.                                                                          | Beta/vendor profile                                                          |
+| Area                                      | Contract rule                                                                                                                                                                                                                                            | Status                                                                       |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| HTTP requests and responses               | Use HTTP semantics, status codes, headers, content negotiation, conditional requests, and `Retry-After` as defined by HTTP Semantics ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)).                                                               | Normative core                                                               |
+| Structured failures                       | Use `application/problem+json` and the Problem Details members defined by [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html), with the stable error extensions in this document.                                                                    | Normative core                                                               |
+| API description                           | Publish an OpenAPI 3.1.1 description. OpenAPI 3.1 uses JSON Schema semantics for schemas; the contract schemas use JSON Schema 2020-12-compatible constructs.                                                                                            | Normative core                                                               |
+| Data schemas                              | Validate requests and responses against the published JSON Schemas. Unknown `x-` extension members may be ignored; unknown required core members are a contract-version error.                                                                           | Normative core                                                               |
+| Event envelope                            | Use CloudEvents v1.0.2. The specification requires only `specversion`, `id`, `source`, and `type`; this contract additionally requires `subject`, `time`, `datacontenttype`, `merchantid`, `contractversion`, and `data` for normalized merchant events. | Normative core                                                               |
+| Webhook authentication                    | Verify the merchant's configured native signature, or use an approved HTTP Message Signature profile ([RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html)) when native signing is unavailable.                                                       | Normative core                                                               |
+| OAuth/mTLS credentials                    | Use an approved server-to-server OAuth profile or mTLS profile. OAuth scopes, resource/audience restriction, token exchange, and sender-constrained artifacts are deployment security profiles and are not replaced by this commerce schema.             | Normative integration requirement; deployment profile selected at onboarding |
+| Async event documentation                 | AsyncAPI MAY describe deployment channels in addition to CloudEvents. It does not replace the CloudEvents envelope or the delivery rules here.                                                                                                           | Optional                                                                     |
+| Shopify-, SAP-, and Oracle-style mappings | These may be published as `*.beta` connector profiles. They are examples of adapter translation, not certification, support claims, or normative vendor API shapes.                                                                                      | Beta/vendor profile                                                          |
 
 The normative core uses OpenAPI/JSON Schema/CloudEvents as protocol and schema standards. It does
 not claim that a merchant platform implements any particular route, field, checkout mode, payment
@@ -101,83 +101,28 @@ The first stable contract is named `merchant-commerce-adapter/v1`.
   `merchant-commerce-adapter/v1` with `profile: shopify-style.beta` does not imply a Shopify API
   version or production support.
 
-The contract's OpenAPI description is normative for the selected version. The following excerpt shows
-the required machine-readable shape; the operation matrix and schemas below complete its semantics:
+The machine-readable contract artifacts are normative and versioned with this document:
 
-```yaml
-openapi: 3.1.1
-info:
-  title: Merchant Commerce Adapter
-  version: 1.0.0
-  description: Platform-neutral merchant-authoritative commerce contract
-servers:
-  - url: https://adapter.example.invalid/v1
-paths:
-  /capabilities:
-    get:
-      operationId: discoverCapabilities
-      responses:
-        '200':
-          content:
-            application/vnd.merchant-commerce.v1+json:
-              schema:
-                $ref: '#/components/schemas/CapabilityDocument'
-  /catalog/search:
-    post:
-      operationId: searchCatalog
-      responses:
-        '200':
-          content:
-            application/vnd.merchant-commerce.v1+json:
-              schema:
-                $ref: '#/components/schemas/AdapterResponse'
-  /carts/{cartRef}/reconcile:
-    post:
-      operationId: reconcileCart
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IfMatch'
-      responses:
-        '200':
-          content:
-            application/vnd.merchant-commerce.v1+json:
-              schema:
-                $ref: '#/components/schemas/AdapterResponse'
-        '409':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-components:
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema: { type: string, minLength: 16, maxLength: 256 }
-    CorrelationId:
-      name: X-Correlation-Id
-      in: header
-      required: true
-      schema: { type: string, minLength: 8, maxLength: 128 }
-    IfMatch:
-      name: If-Match
-      in: header
-      required: false
-      schema: { type: string, minLength: 1, maxLength: 256 }
-  schemas:
-    CapabilityDocument:
-      $ref: https://schemas.example.invalid/merchant-commerce-adapter/v1/capabilities.json
-    AdapterResponse:
-      $ref: https://schemas.example.invalid/merchant-commerce-adapter/v1/response.json
-    Problem:
-      $ref: https://schemas.example.invalid/merchant-commerce-adapter/v1/problem.json
-```
+- [`commerce-adapter-openapi.json`](./commerce-adapter-openapi.json) is the complete OpenAPI 3.1.1
+  description. It declares every canonical operation ID, logical route, HTTP method, required
+  metadata header, request body, success/accepted response, error response, capability requirement,
+  security scheme, and local schema reference. A deployment MAY substitute its origin for the
+  relative `/v1` server URL, but MUST preserve the operation IDs, schemas, and semantics.
+- [`commerce-adapter-schemas.json`](./commerce-adapter-schemas.json) is the complete JSON Schema
+  2020-12 vocabulary. It defines the common metadata, capability document, request models, typed
+  operation response envelopes, RFC 9457 Problem Details extensions, CloudEvent, and webhook
+  acknowledgment. The OpenAPI file references these definitions directly; there is no unresolved
+  remote schema dependency or unresolved placeholder reference.
 
-The `example.invalid` URLs are placeholders in this documentation excerpt, not required network
-locations. A real implementation MUST publish resolvable schemas and an OpenAPI document from its
-versioned contract package or documentation registry.
+These two files are the implementation handoff: a connector team can validate payloads and generate
+client/server scaffolding from them without reconstructing schemas from prose. This Markdown file
+remains normative for authority, lifecycle, retry, security, and conformance semantics that JSON
+Schema and OpenAPI cannot express. If prose and a machine-readable artifact disagree, the contract
+version must be corrected before implementation; an implementation MUST NOT silently choose one.
+
+The OpenAPI document uses the relative deployment server `/v1` rather than a fictional host. A
+merchant/provider deployment MUST publish the same files at a versioned registry or package location
+and resolve the adjacent JSON Schema reference before serving the contract to tooling.
 
 ### 3.2 HTTP request metadata
 
@@ -190,7 +135,7 @@ merchant context or effective subject.
 | Contract version | `Accept` and `Content-Type`                                    | Required for version negotiation.                                                                                                                                                                                                                                                          |
 | Merchant scope   | `X-Merchant-Id` or authenticated tenant context                | Required on every request. It MUST match the authenticated connector registration; a body value cannot widen scope.                                                                                                                                                                        |
 | Correlation ID   | `X-Correlation-Id`                                             | Required on every request and response. One logical shopper operation carries the same value through BFF, adapter, merchant, payment, and event records.                                                                                                                                   |
-| Idempotency key  | `Idempotency-Key`                                              | Required on every state-changing operation. The key is scoped to merchant, operation family, and authenticated integration.                                                                                                                                                                |
+| Idempotency key  | `Idempotency-Key`                                              | Required on state-changing HTTP operations; not used for webhook event deduplication. The key is scoped to merchant, operation family, and authenticated integration.                                                                                                                      |
 | Expected version | `If-Match` and/or request `expectedVersion`                    | Required when mutating an existing cart, checkout, or order if the merchant exposes a version/ETag. Omission is allowed only when the capability says optimistic concurrency is unavailable and the operation is safe under the merchant's native semantics.                               |
 | Subject context  | Authenticated server-side context and minimal `subject` object | Required for customer, loyalty, cart, checkout, payment, and order operations. Guest catalog reads may omit it. The subject is derived from provider authorization and merchant correlation, never from an arbitrary client `userId`.                                                      |
 | Agent context    | Authenticated server-side context and `agentId`                | Required for provider-mediated actions. It identifies the approved payment-provider agent and policy context; it is not a merchant customer identity.                                                                                                                                      |
@@ -203,162 +148,35 @@ responses MUST NOT expose credentials or raw upstream requests.
 
 ### 3.3 JSON Schema core models
 
-The following schemas are normative JSON Schema 2020-12-compatible excerpts. A published OpenAPI
-3.1 document MUST carry equivalent definitions with the same required fields and authority rules.
+The complete JSON Schema definitions live in `commerce-adapter-schemas.json`. The following named
+schemas are the minimum shared vocabulary and are referenced by every operation in the OpenAPI
+document:
 
-#### 3.3.1 Request intent and money
+- `ResourceRef`, `Currency`, `Money`, and `LineIntent` define opaque merchant references, ISO
+  currency, integer minor-unit money, and client intent. `Money` is never accepted as an authority
+  in a mutation request.
+- `SubjectContext` carries server-derived provider subject and agent context. The browser cannot
+  choose an effective subject, merchant, or agent.
+- `ResponseMeta`, `Status`, and the operation-specific `*Response` definitions enforce merchant,
+  correlation, operation, contract-version, observation, status, and typed data fields.
+- `ResolvedLine`, `CartData`, `QuoteData`, `CheckoutData`, `PaymentData`, `OrderData`, and
+  `FulfillmentData` contain merchant-resolved values and versions/expiry where applicable.
+- `Problem` defines the RFC 9457 members plus stable `code`, `category`, `retryable`, correlation,
+  operation, version, and redacted detail extensions.
+- `CapabilityDocument` defines the complete capability vocabulary and requires an entry for every
+  canonical capability, including explicitly unsupported entries.
+- `CloudEvent` and `WebhookAck` define the normalized event input and safe duplicate acknowledgment.
 
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.example.invalid/merchant-commerce-adapter/v1/core.json",
-  "$defs": {
-    "ResourceRef": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 512,
-      "description": "Opaque merchant-native identifier; meaningful only to the merchant scope."
-    },
-    "Currency": {
-      "type": "string",
-      "pattern": "^[A-Z]{3}$",
-      "description": "Uppercase ISO 4217 currency code."
-    },
-    "Money": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["amountMinor", "currency", "scale"],
-      "properties": {
-        "amountMinor": { "type": "integer", "minimum": 0 },
-        "currency": { "$ref": "#/$defs/Currency" },
-        "scale": { "type": "integer", "minimum": 0, "maximum": 4 }
-      },
-      "description": "Adapter-resolved money. Floating-point amounts are not permitted."
-    },
-    "LineIntent": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["productRef", "quantity"],
-      "properties": {
-        "productRef": { "$ref": "#/$defs/ResourceRef" },
-        "variantRef": { "$ref": "#/$defs/ResourceRef" },
-        "quantity": { "type": "integer", "minimum": 1, "maximum": 10000 },
-        "selectedOptionRefs": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/ResourceRef" },
-          "maxItems": 100,
-          "uniqueItems": true
-        }
-      }
-    },
-    "SubjectContext": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["providerSubject", "agentId"],
-      "properties": {
-        "providerSubject": { "$ref": "#/$defs/ResourceRef" },
-        "merchantCustomerRef": { "$ref": "#/$defs/ResourceRef" },
-        "agentId": { "$ref": "#/$defs/ResourceRef" },
-        "scopes": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "uniqueItems": true
-        }
-      },
-      "description": "Server-derived identity/delegation context; not a browser-supplied authority."
-    }
-  }
-}
-```
+The schemas set `additionalProperties: false` on core objects. Optional connector data is permitted
+only through `x-` namespaced extension maps. A connector MUST validate both request and response
+instances against the selected version before invoking or returning a native platform payload.
 
 `Money` is an amount representation, not permission to charge. A money value is authoritative only
 when it appears in a merchant quote, checkout, or other adapter response with a matching version and
-validity interval. A request MUST NOT use `Money` to override a merchant-resolved amount.
-
-#### 3.3.2 Adapter response envelope and resolved line
-
-```json
-{
-  "$defs": {
-    "ResponseMeta": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["merchantId", "correlationId", "operationId", "contractVersion", "observedAt"],
-      "properties": {
-        "merchantId": { "$ref": "#/$defs/ResourceRef" },
-        "correlationId": { "type": "string", "minLength": 8, "maxLength": 128 },
-        "operationId": { "type": "string", "minLength": 8, "maxLength": 256 },
-        "idempotencyKey": { "type": "string", "minLength": 16, "maxLength": 256 },
-        "contractVersion": { "const": "merchant-commerce-adapter/v1" },
-        "adapterProfile": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "observedAt": { "type": "string", "format": "date-time" },
-        "sourceVersion": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "expiresAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "ResolvedLine": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "lineRef",
-        "productRef",
-        "quantity",
-        "title",
-        "unitPrice",
-        "currency",
-        "availability",
-        "resolvedAt"
-      ],
-      "properties": {
-        "lineRef": { "$ref": "#/$defs/ResourceRef" },
-        "productRef": { "$ref": "#/$defs/ResourceRef" },
-        "variantRef": { "$ref": "#/$defs/ResourceRef" },
-        "quantity": { "type": "integer", "minimum": 0 },
-        "title": { "type": "string", "maxLength": 1000 },
-        "unitPrice": { "$ref": "#/$defs/Money" },
-        "currency": { "$ref": "#/$defs/Currency" },
-        "availability": {
-          "type": "string",
-          "enum": ["available", "limited", "unavailable", "unknown"]
-        },
-        "resolvedAt": { "type": "string", "format": "date-time" },
-        "metadata": {
-          "type": "object",
-          "propertyNames": { "pattern": "^x-[a-z0-9][a-z0-9.-]*$" },
-          "additionalProperties": true
-        }
-      }
-    },
-    "AdapterResponse": {
-      "type": "object",
-      "required": ["meta", "status"],
-      "properties": {
-        "meta": { "$ref": "#/$defs/ResponseMeta" },
-        "status": {
-          "type": "string",
-          "enum": [
-            "succeeded",
-            "accepted",
-            "running",
-            "requires_action",
-            "pending",
-            "unknown",
-            "failed",
-            "cancelled"
-          ]
-        },
-        "data": {},
-        "warnings": { "type": "array", "items": { "type": "string", "maxLength": 500 } }
-      },
-      "additionalProperties": false
-    }
-  }
-}
-```
-
-The provider owns the normalized field names and status vocabulary. The adapter owns the values
-placed in those fields. `metadata` is an extension escape hatch only: keys MUST be namespaced with
-`x-`, and an extension MUST NOT be required to understand or authorize a generic operation.
+validity interval. A request MUST NOT use `Money` to override a merchant-resolved amount. The
+prohibition on client-authoritative price, tax, inventory, status, and total fields is therefore
+represented both by the request schemas (those properties are absent) and by the runtime validation
+rule in Section 2.1.
 
 ## 4. Capability discovery and integration metadata
 
@@ -368,6 +186,26 @@ The provider MUST cache it only with an explicit `expiresAt` and MUST refresh it
 configuration change or capability error.
 
 ### 4.1 Capability document
+
+`GET /v1/capabilities` returns the `CapabilityDocument` schema. Its `capabilities` object MUST
+contain an explicit entry for every canonical capability below; an entry with `status: unsupported`
+is still a contract-complete declaration and MUST produce `501 capability_not_supported` when
+called. This prevents a connector from silently omitting a required operation:
+
+```text
+capability.discovery       catalog.search          catalog.product
+catalog.availability       commerce.quote          customer.lookup
+loyalty.lookup             cart.create             cart.read
+cart.update                cart.validate           cart.reconcile
+cart.expire                checkout.create         checkout.read
+checkout.cancel            payment.authorize       payment.capture
+order.create               order.confirm           order.read
+order.cancel               fulfillment.status      operation.status
+events.webhook
+```
+
+A conforming capability document is represented by the following complete JSON shape (the full
+schema, including property constraints, is in `commerce-adapter-schemas.json`):
 
 ```json
 {
@@ -388,51 +226,68 @@ configuration change or capability error.
     "connectorVersion": "1.4.0"
   },
   "capabilities": {
+    "capability.discovery": { "status": "supported", "mode": "sync" },
     "catalog.search": { "status": "supported", "mode": "sync" },
     "catalog.product": { "status": "supported", "mode": "sync" },
     "catalog.availability": { "status": "supported", "mode": "sync" },
     "commerce.quote": { "status": "supported", "mode": "sync", "maxTtlSeconds": 300 },
-    "customer.lookup": { "status": "supported", "mode": "sync" },
-    "loyalty.lookup": { "status": "limited", "mode": "sync", "scopes": ["loyalty.read"] },
-    "cart.create": { "status": "supported", "mode": "sync" },
+    "customer.lookup": { "status": "supported", "mode": "sync", "requiresSubject": true },
+    "loyalty.lookup": {
+      "status": "limited",
+      "mode": "sync",
+      "scopes": ["loyalty.read"],
+      "requiresSubject": true
+    },
+    "cart.create": { "status": "supported", "mode": "sync", "optimisticConcurrency": true },
+    "cart.read": { "status": "supported", "mode": "sync", "optimisticConcurrency": true },
     "cart.update": { "status": "supported", "mode": "sync", "optimisticConcurrency": true },
-    "cart.reconcile": { "status": "supported", "mode": "sync" },
-    "checkout.inChat": { "status": "unsupported", "mode": "none" },
+    "cart.validate": { "status": "supported", "mode": "sync", "optimisticConcurrency": true },
+    "cart.reconcile": { "status": "supported", "mode": "sync", "optimisticConcurrency": true },
+    "cart.expire": { "status": "supported", "mode": "sync", "optimisticConcurrency": true },
+    "checkout.create": { "status": "supported", "mode": "sync", "singleUse": true },
     "checkout.redirect": { "status": "supported", "mode": "sync", "singleUse": true },
-    "payment.authorize": { "status": "supported", "mode": "async" },
-    "payment.capture": { "status": "supported", "mode": "async" },
-    "order.confirm": { "status": "supported", "mode": "sync" },
-    "order.cancel": { "status": "limited", "mode": "async" },
-    "fulfillment.status": { "status": "supported", "mode": "async" },
+    "checkout.read": { "status": "supported", "mode": "sync" },
+    "checkout.cancel": { "status": "supported", "mode": "sync" },
+    "payment.authorize": { "status": "supported", "mode": "async", "requiresSubject": true },
+    "payment.capture": { "status": "supported", "mode": "async", "requiresSubject": true },
+    "order.create": { "status": "supported", "mode": "sync", "requiresSubject": true },
+    "order.confirm": { "status": "supported", "mode": "sync", "requiresSubject": true },
+    "order.read": { "status": "supported", "mode": "sync", "requiresSubject": true },
+    "order.cancel": { "status": "limited", "mode": "async", "requiresSubject": true },
+    "fulfillment.status": { "status": "supported", "mode": "async", "requiresSubject": true },
+    "operation.status": { "status": "supported", "mode": "sync", "requiresSubject": true },
     "events.webhook": { "status": "supported", "mode": "async" }
   },
   "limits": {
     "maxPageSize": 100,
     "maxRequestBytes": 1048576,
-    "defaultTimeoutMs": 5000
+    "defaultTimeoutMs": 5000,
+    "maxTimeoutMs": 30000
   },
   "supportedLocales": ["en-US"],
   "supportedCurrencies": ["USD"],
   "webhook": {
-    "eventTypes": ["order.updated", "inventory.changed"],
+    "eventTypes": [
+      "com.merchant.commerce.order.updated",
+      "com.merchant.commerce.inventory.changed"
+    ],
     "signatureProfile": "merchant-native-hmac",
     "replayWindowSeconds": 300
   }
 }
 ```
 
-Each capability entry MUST declare:
-
-- `status`: `supported`, `limited`, or `unsupported`;
-- `mode`: `sync`, `async`, or `none`;
-- relevant constraints such as scopes, max TTL, supported payment methods, pagination limits,
-  optimistic-concurrency support, or required customer context; and
-- an `expiresAt` through the response metadata.
+Each capability entry MUST declare `status` (`supported`, `limited`, or `unsupported`) and `mode`
+(`sync`, `async`, or `none`). It MUST declare relevant constraints such as scopes, maximum TTL,
+supported payment methods, pagination limits, optimistic-concurrency support, or required subject
+context. Capability metadata expires with the response `meta.expiresAt`; the provider MUST refresh
+it after expiry, connector configuration changes, or a capability error.
 
 `limited` means the provider must enforce the declared constraint and expose a deterministic
 fallback. `unsupported` MUST produce `501` with `capability_not_supported` when called; the adapter
 MUST NOT silently emulate it with an unsafe provider-side record. For checkout, an unsupported
-`checkout.inChat` capability MUST be paired with `checkout.redirect` or an explicit failure path.
+`checkout.create` in-chat mode MUST be paired with an explicitly advertised redirect capability in
+the connector profile or an explicit failure path.
 
 ### 4.2 Merchant integration manifest
 
@@ -510,7 +365,7 @@ required for an existing resource whenever the capability advertises optimistic 
 | `cancelCheckoutSession`        | `POST /checkouts/{checkoutRef}/cancel`               | `checkout.cancel`                                              | Required                                                                         | Correlation, idempotency, subject, expected version                              | Cancellation result; cancellation is not a refund unless explicitly supported.                          |
 | `authorizePayment`             | `POST /checkouts/{checkoutRef}/payment/authorize`    | `payment.authorize` or a documented merchant-native equivalent | Required; provider payment reference is server-bound                             | Correlation, idempotency, subject, expected checkout version, consent reference  | Authorization status or challenge/continuation. No raw instrument.                                      |
 | `capturePayment`               | `POST /checkouts/{checkoutRef}/payment/capture`      | `payment.capture` or a documented merchant-native equivalent   | Required                                                                         | Correlation, idempotency, subject, expected checkout version                     | Capture status and payment reference.                                                                   |
-| `createOrder` / `confirmOrder` | `POST /orders` or `/checkouts/{checkoutRef}/confirm` | `order.confirm`                                                | Required                                                                         | Correlation, idempotency, subject, expected checkout version, payment reference  | Merchant order reference/status only after authoritative confirmation.                                  |
+| `createOrder` / `confirmOrder` | `POST /orders` or `/checkouts/{checkoutRef}/confirm` | `order.create` / `order.confirm`                               | Required                                                                         | Correlation, idempotency, subject, expected checkout version, payment reference  | Merchant order reference/status only after authoritative confirmation.                                  |
 | `getOrder`                     | `GET /orders/{orderRef}`                             | `order.read`                                                   | Required                                                                         | Correlation; no idempotency                                                      | Merchant order status and safe receipt data.                                                            |
 | `cancelOrder`                  | `POST /orders/{orderRef}/cancel`                     | `order.cancel`                                                 | Required                                                                         | Correlation, idempotency, subject, expected version                              | Merchant cancellation result; may be asynchronous.                                                      |
 | `getFulfillmentStatus`         | `GET /orders/{orderRef}/fulfillment`                 | `fulfillment.status`                                           | Required                                                                         | Correlation; no idempotency                                                      | Merchant fulfillment status, tracking links classified as display-safe, and version.                    |
@@ -592,8 +447,11 @@ correlation values before retrying or telling the shopper that no effect occurre
 
 ### 6.1 Idempotency
 
-Every state-changing operation (`createCart`, `updateCart`, `reconcileCart`, checkout, payment,
-order, cancellation, and event effect processing) MUST have an `Idempotency-Key`.
+Every state-changing HTTP operation (`createCart`, `updateCart`, `reconcileCart`, checkout, payment,
+order, and cancellation) MUST have an `Idempotency-Key`. Read operations and webhook delivery MUST
+not use this header as their deduplication mechanism. A quote request MAY omit it when it only
+resolves a quote; if the declared quote capability creates a reservation or other state change, it
+becomes a state-changing HTTP operation and requires the key.
 
 - The provider generates the key for one logical operation and reuses it for retries and
   reconciliation. A browser may request an operation, but it cannot select the authority or reuse a
@@ -605,8 +463,17 @@ order, cancellation, and event effect processing) MUST have an `Idempotency-Key`
 - Concurrent requests with the same key MUST converge on one result or one in-progress operation.
 - A timeout after a mutation was submitted is an unknown outcome, not permission to create a new key.
 
-Idempotency keys are not correlation IDs. A key identifies one mutation; a correlation ID links all
-related operations, events, payment references, and audit records.
+Idempotency keys are not correlation IDs. A key identifies one HTTP mutation; a correlation ID links all
+related operations, events, payment references, and audit records. HTTP idempotency is an application
+safeguard for retrying a state-changing request; HTTP method choice alone does not make a request
+retry-safe.
+
+Webhook event deduplication is a separate event-ingestion rule. A valid CloudEvent is deduplicated by
+its identity tuple `(source, id)` and the dedupe result is recorded before applying an event effect.
+The receiver MUST NOT require or infer an `Idempotency-Key` for a webhook, and the event ID MUST NOT be
+used as an HTTP mutation key. A duplicate valid event may be acknowledged as `duplicate` without
+repeating effects. These two mechanisms remain separate even when the event was emitted because of
+an HTTP mutation.
 
 ### 6.2 Correlation and operation state
 
@@ -657,7 +524,7 @@ required when known:
 
 ```json
 {
-  "type": "https://errors.example.invalid/merchant-commerce-adapter/version-conflict",
+  "type": "urn:merchant-commerce-adapter:error:version-conflict",
   "title": "Merchant resource changed",
   "status": 409,
   "detail": "The cart changed before this update was applied.",
@@ -744,12 +611,15 @@ or `unknown` to the shopper until authoritative reconciliation completes.
 
 ### 8.1 CloudEvents envelope
 
-A merchant event is delivered as a CloudEvent v1.0.2 in structured mode or binary mode. The required
-context attributes are `specversion`, `id`, `source`, `type`, `subject`, and `time`; `datacontenttype`
-MUST be `application/json` for this contract. The following extension attributes are required when
-known:
+A merchant event is delivered as a CloudEvent v1.0.2 in structured mode or binary mode. Under the
+CloudEvents specification, the four required context attributes are only `specversion`, `id`, `source`,
+and `type`. `subject`, `time`, `datacontenttype`, and `data` are optional in the CloudEvents
+specification. This contract adds stricter requirements for normalized merchant events: `subject`,
+`time`, `datacontenttype` (which MUST be `application/json`), `merchantid`, `contractversion`, and
+`data` are contract-required. The complete `CloudEvent` schema records that distinction. The
+following extension attributes are contract-required when known:
 
-- `merchantid`: the provider merchant scope;
+- `merchantid`: the provider merchant scope; this contract requires it on every normalized event;
 - `contractversion`: `merchant-commerce-adapter/v1`;
 - `correlationid`: related operation correlation, if any;
 - `operationid`: related mutation operation, if any;
@@ -797,7 +667,7 @@ MUST be able to process the core type or safely ignore an optional extension.
 
 ### 8.2 Verification, replay, deduplication, and delivery
 
-CloudEvents does not authenticate an event. Before parsing or applying `data`, the receiver MUST:
+CloudEvents identifies an event but does not authenticate it. Before parsing or applying `data`, the receiver MUST:
 
 1. authenticate the source using the configured native signature or approved HTTP Message Signature;
 2. validate the signature over the exact request representation and required headers;

@@ -69,3 +69,54 @@ TypeScript types, connectors, payment resources, webhook endpoints, or live iden
   connector support claim is introduced.
 - No runtime, configuration, seed-data, identity-provider, payment, merchant, adapter, webhook, or
   external-resource changes were made.
+
+## Fix Iteration 1
+
+### Status
+
+**DONE**
+
+### Review findings addressed
+
+- Replaced the tiny illustrative OpenAPI/JSON Schema excerpt with two checked-in machine-readable
+  contract artifacts: `docs/commerce-adapter-openapi.json` and
+  `docs/commerce-adapter-schemas.json`. The OpenAPI document now declares all canonical operation
+  IDs, logical routes, methods, request bodies, typed operation responses, shared headers, security,
+  capability annotations, and structured error responses. The adjacent JSON Schema 2020-12 document
+  provides complete request, response, capability, Problem Details, CloudEvent, and webhook schemas.
+- Removed unresolved `example.invalid` references and the fictional server URL. OpenAPI references the
+  adjacent local schema artifact and uses a relative `/v1` deployment base path; deployment-specific
+  origins remain onboarding configuration rather than contract placeholders.
+- Completed capability coverage for every canonical operation, including `capability.discovery`,
+  `cart.read`, `order.create`, and the separate `checkout.redirect` fallback capability. The
+  capability schema requires an explicit entry for every capability, including `unsupported` entries.
+- Separated HTTP mutation idempotency from webhook event deduplication. `Idempotency-Key` is required
+  for state-changing HTTP operations (with quote reservations called out as conditional); webhook
+  ingestion does not use that header and deduplicates valid CloudEvents by `(source, id)` before
+  applying effects.
+- Corrected the CloudEvents v1.0.2 distinction: the specification-required context attributes are
+  `specversion`, `id`, `source`, and `type`; `subject`, `time`, `datacontenttype`, and `data` are
+  optional in the specification but required by this normalized merchant-event contract, with
+  `merchantid` and `contractversion` also contract-required.
+
+### Fix Iteration 1 verification
+
+- Parsed all four JSON fenced examples in the Markdown contract with Python's JSON parser.
+- Parsed `docs/commerce-adapter-openapi.json` and `docs/commerce-adapter-schemas.json` successfully.
+- Verified all 25 canonical operation IDs are present exactly once, every operation has a capability
+  annotation, every capability annotation belongs to the declared vocabulary, and every capability
+  vocabulary entry is required by the capability schema.
+- Verified all OpenAPI component schema references resolve to definitions in the adjacent JSON Schema
+  artifact and no `example.invalid` reference remains.
+- `pnpm exec prettier --check docs/commerce-adapter-contract.md docs/commerce-adapter-openapi.json docs/commerce-adapter-schemas.json` passed.
+- `git diff --check` passed.
+- Tests, lint, typecheck, and build were not run because the plan specifies `Testing: none` for this
+  documentation-only contract-definition task.
+
+### Fix Iteration 1 deviations
+
+- Added the two machine-readable JSON artifacts within the existing documentation-only Task 3 scope;
+  no generated TypeScript types, runtime adapter, connector, endpoint, payment, identity, or webhook
+  implementation was introduced.
+- No review file was present at the requested Task 3 path in the checkout; the requested findings were
+  applied from the user-provided review summary.
