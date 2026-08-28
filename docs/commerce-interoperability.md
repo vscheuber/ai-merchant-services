@@ -2,13 +2,15 @@
 
 ## Current-state assessment
 
-**Assessment status:** evidence baseline and gap register only (Implementation Plan Task 1).
+**Document status:** Task 1 current-state evidence baseline and gap register, plus the Task 2 target
+architecture decision. The target is a recommendation, not an implementation or a claim of
+production readiness. The canonical adapter contract, connector comparison, security detail,
+reliability model, and Phase 1 implementation backlog remain follow-on tasks.
 
-This document records behavior observed in the checked-in repository. It is not a target
-architecture, adapter contract, implementation plan, or claim of production readiness. The
-architecture recommendation and future-state contract are intentionally left to later tasks.
-Every observation below names the repository path that was reviewed; line ranges identify the
-relevant implementation or documentation.
+The current-state section records behavior observed in the checked-in repository. The target
+architecture section is explicitly future-state and is not evidence that any proposed component
+or control exists today. Every current-state observation names the repository path that was
+reviewed; line ranges identify the relevant implementation or documentation.
 
 ### Assessment boundary and evidence rules
 
@@ -260,6 +262,193 @@ this absence. The search included runtime source and documentation; the only MCP
 were Frodo provisioning notes, not a merchant-commerce contract. This is an absence finding from
 repository inspection, not a claim that a future contract has been designed or that any vendor API
 is supported.
+
+## Target architecture decision (Task 2)
+
+### Decision
+
+**Adopt one provider-owned orchestration boundary backed by a canonical Merchant Commerce
+Adapter.** The reusable provider chatbot is embedded by the merchant as a thin host integration;
+all commerce and payment operations run through the provider backend, its policy and consent
+controls, and the adapter boundary. The merchant's commerce platform remains the authoritative
+system of record. The provider keeps only short-lived conversational intent and operational
+correlation state, then synchronizes and revalidates that intent against merchant truth before
+checkout and payment.
+
+This is the single recommended architecture for the product. It applies whether the merchant
+uses Shopify, SAP Commerce, Oracle Commerce, or a custom platform. Platform-specific behavior is
+connector implementation detail and capability metadata, not a chatbot prompt contract or a
+payment API contract.
+
+### Ownership and responsibility boundary
+
+| Component / party                        | Owns and is authoritative for                                                                                                                                                                                                                                             | Must not own or do                                                                                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Merchant host / thin integration**     | Loading the versioned widget or SDK, supplying public merchant configuration and allowed origin, rendering display-safe events, and offering a merchant checkout fallback.                                                                                                | Merchant secrets, payment credentials, raw identity tokens, authoritative prices/totals, or direct commerce/payment calls from browser code.                                          |
+| **Provider widget**                      | Conversation input/output, non-sensitive display state, cart-intent presentation, explicit confirmation UI, and host events such as `login-required`, `checkout-started`, `redirect-required`, `order-confirmed`, and `error`.                                            | Calling merchant commerce APIs, payment APIs, merchant IDP token endpoints, or connector credentials. A click, local storage value, or model response is never payment authorization. |
+| **Provider chatbot backend / BFF**       | Chat session, merchant/origin binding, identity handoff, server-side conversation state, canonical adapter invocation, input/schema validation, authorization checks, consent state, correlation, idempotency, audit, and safe response shaping.                          | Becoming a catalog, inventory, cart, checkout, order, fulfillment, or loyalty system of record.                                                                                       |
+| **Provider identity and trust services** | Merchant-to-provider subject binding, token exchange/delegation, provider-side agent identity, audience/resource and scope restriction, merchant/customer correlation, expiry/revocation, and policy decisions.                                                           | Treating OIDC authentication alone, a caller-supplied user/merchant ID, or a browser token as commerce or payment authorization.                                                      |
+| **Adapter gateway / framework**          | The versioned platform-neutral contract, capability discovery, normalized request/response and error model, credential isolation, retry/timeouts, rate limits, vendor translation, redaction, and connector conformance.                                                  | Exposing platform-specific payloads as the provider product contract or silently emulating unsupported capabilities.                                                                  |
+| **Merchant adapter / thin connector**    | Translating canonical operations into the selected merchant platform's native API, using merchant-approved server-side credentials, preserving native IDs/versions internally, and verifying/normalizing merchant events.                                                 | Issuing provider payment authority, accepting model-generated totals, or moving merchant truth into a provider-owned long-lived mirror.                                               |
+| **Merchant commerce system**             | Product/catalog identity, availability/inventory, price, promotions, customer/account, loyalty fields it exposes, tax, shipping, delivery options, authoritative cart, checkout session, order creation/status, fulfillment, cancellation/returns, and merchant policies. | Delegating authority to the widget, LLM, provider cache, or client-provided price/quantity/total without its own validation.                                                          |
+| **Payment orchestrator**                 | Server-side payment authorization/capture using provider payment references, consent binding, merchant checkout/order correlation, challenge/redirect handling, operation state, and payment audit.                                                                       | Receiving raw PAN in the LLM/widget, inferring consent from UI state, or declaring a merchant order successful without authoritative merchant/payment status.                         |
+| **Webhook / reconciliation worker**      | Authenticity and replay checks, event deduplication, correlation, ordering/version metadata, retry/dead-letter behavior, ambiguous-operation lookup, and invalidation of short-lived provider projections.                                                                | Overwriting merchant state or treating an unverified browser callback as proof of payment/order success.                                                                              |
+
+The merchant therefore owns commerce truth; the provider owns reusable experience, trust and
+identity orchestration, agent authorization, payment orchestration, consent, adapter framework,
+and operational controls. Provider records may contain merchant-scoped opaque references,
+short-lived quote/cart/checkout handles, consent evidence, idempotency results, payment
+references, audit metadata, and correlation IDs. They must not become a competing long-lived
+catalog, cart, loyalty, or order ledger.
+
+### Trust and data-flow topology
+
+The widget has exactly one application trust path for commerce: to the provider chatbot backend.
+The backend obtains server-side provider authorization and invokes the adapter gateway. The
+adapter uses server-side merchant credentials to call the merchant system. The payment
+orchestrator separately handles provider payment references and correlates the result with the
+merchant checkout/order. The widget never receives merchant credentials, connector credentials,
+raw merchant/provider tokens, raw payment data, or an authority-bearing user selector.
+
+```text
+ Shopper browser / merchant host
+ ┌──────────────────────────────────────────────────────────────────────────┐
+ │ Merchant page                                                            │
+ │  ┌───────────────┐        conversation + opaque session handle           │
+ │  │ Provider widget├────────────────────────────────────────────────────┐  │
+ │  └───────────────┘                                                    │  │
+ └────────────────────────────────────────────────────────────────────────┼──┘
+                                                                          │ HTTPS
+                                                                          ▼
+ Provider control plane (server side)                                    │
+ ┌──────────────────────┐   ┌──────────────────────┐   ┌────────────────┐ │
+ │ Chatbot backend / BFF├──►│ Identity + agent     │   │ Payment        │ │
+ │ session, policy,     │   │ trust/token service  │   │ orchestrator   │ │
+ │ consent, audit       │   └──────────────────────┘   └───────┬────────┘ │
+ └──────────┬───────────┘                                      │          │
+            │ canonical commerce calls                          │ payment │
+            ▼                                                   │ refs     │
+ ┌──────────────────────┐                                       │          │
+ │ Adapter gateway      │◄──────────────────────────────────────┘          │
+ │ capabilities, schema,│                                                  │
+ │ retries, redaction   │                                                  │
+ └──────────┬───────────┘                                                  │
+            │ server-side connector credentials                             │
+            ▼                                                               │
+ ┌────────────────────────────┐                          ┌────────────────┐ │
+ │ Merchant adapter / connector│─────────────────────────►│ Merchant       │ │
+ │ Shopify/SAP/Oracle/custom   │  native commerce APIs   │ commerce SOR   │ │
+ └────────────────────────────┘                          │ catalog ...    │ │
+                                                         │ cart/checkout  │ │
+                                                         │ order/fulfill  │ │
+                                                         └────────────────┘ │
+                                                                          │
+ Provider payment boundary ◄──────────── approved payment result ─────────┘
+
+ Merchant webhooks/events ──signed──► webhook + reconciliation worker ──► provider projections
+```
+
+The right-hand merchant and payment boundaries are reachable only from server-side provider
+components. In particular, there is no arrow from **Provider widget** to **Merchant commerce
+SOR**, **Merchant adapter**, or **Payment orchestrator**. A merchant-hosted script is a rendering
+and session-initiation surface, not a privileged commerce proxy.
+
+### Request sequence: discovery through consented order
+
+The following sequence is the required target request path. It intentionally shows every commerce
+operation passing through the backend and adapter; it does not describe the current POC behavior.
+
+```text
+ Shopper       Widget        Chatbot BFF       Identity/Policy       Adapter       Merchant SOR       Payment       Reconciler
+   │             │              │                    │                │               │                │              │
+   │ open/chat   │              │                    │                │               │                │              │
+   ├────────────►│              │                    │                │               │                │              │
+   │             │ conversation │                    │                │               │                │              │
+   │             ├─────────────►│ bind merchant/origin/session         │               │                │              │
+   │             │              ├───────────────────►│ authenticate/delegate           │                │              │
+   │             │              │◄───────────────────┤ scoped subject + agent          │                │              │
+   │ search intent│              │                    │                │               │                │              │
+   │─────────────►│─────────────►│ search/get product ────────────────►│──────────────►│                │              │
+   │             │              │◄────────────────────────────────────┤ normalized result │            │              │
+   │◄────────────┤◄──────────────┤ display-safe summary/quote           │               │                │              │
+   │ add/change  │              │                    │                │               │                │              │
+   ├────────────►│─────────────►│ store ephemeral intent (IDs/options/qty only)        │                │              │
+   │ checkout    │              │                    │                │               │                │              │
+   ├────────────►│─────────────►│ materialize/reconcile merchant cart ─►│──────────────►│                │              │
+   │             │              │◄────────────────────────────────────┤ authoritative quote/cart/version│             │
+   │ review      │◄─────────────┤ show current lines, totals, tax/shipping, expiry      │                │              │
+   ├─confirm────►│─────────────►│ record server-observed consent + nonce                │                │              │
+   │             │              ├───────────────────►│ reauthorize subject/scope/cart │                │              │
+   │             │              ├────────────────────────────────────►│ revalidate checkout ─────────►│              │
+   │             │              │◄────────────────────────────────────┤ final merchant amount/version │              │
+   │             │              ├──────────────────────────────────────────────────────────────────────►│ authorize/capture
+   │             │              │◄──────────────────────────────────────────────────────────────────────┤ result       │
+   │             │              ├────────────────────────────────────►│ confirm/create order ────────►│              │
+   │             │              │◄────────────────────────────────────┤ merchant order/status       │              │
+   │◄────────────┤◄──────────────┤ confirmed only from authoritative results            │                │              │
+   │             │              │                    │                │               │                │              │
+   │             │              │ merchant event / timeout ───────────────────────────────────────────►│ reconcile     │
+```
+
+If merchant data changes during revalidation—price, promotion, availability, tax, shipping,
+quantity, cart version, or checkout expiry—the BFF pauses the operation, displays the exact delta,
+and requires fresh consent. It never silently charges a changed amount. If the merchant cannot
+support in-chat checkout, the adapter declares that capability; the BFF issues a short-lived,
+single-use, merchant-bound continuation to merchant checkout, and the reconciler verifies the
+result from merchant/payment status or signed events rather than trusting a browser return.
+
+### Cart authority and synchronization
+
+The conversational cart is an ephemeral proposal containing merchant product/variant references,
+quantities, selected options, session/conversation ID, observed version or quote, and TTL. Browser
+local storage is disposable display state only. It cannot authorize price, stock, identity, tax,
+shipping, loyalty, payment, or order effects.
+
+On a meaningful mutation, the backend may create or update a merchant cart and retain only its
+opaque handle and version. Immediately before checkout it calls the adapter to reconcile the
+proposal, obtain current merchant availability and commercial values, and create or retrieve the
+authoritative merchant checkout session. The provider may retain a short-lived display projection,
+but the merchant cart, quote, checkout, order, and fulfillment state remain authoritative. The
+provider never promotes a model-generated total or a captured browser snapshot into an order.
+
+### Rejected alternatives
+
+| Alternative                                                                                                                      | Decision | Rejection rationale                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Provider-owned long-lived catalog, cart, checkout, and order system**                                                          | Reject   | Duplicates merchant truth and quickly becomes stale for availability, pricing, promotions, tax, shipping, checkout rules, fulfillment, and returns. It creates reconciliation and duplicate-order risk and violates the requirement that the merchant remain authoritative. |
+| **Platform-specific chatbot contract** (for example, expose Shopify GraphQL or SAP/Oracle payloads directly to the agent/widget) | Reject   | Makes one vendor's object model the product contract, leaks platform-specific payloads into prompts and UI, forces connector logic into the chatbot, and makes capability differences implicit. It prevents a thin, reusable merchant integration.                          |
+| **Widget-to-merchant direct API calls**                                                                                          | Reject   | Exposes browser-origin trust and CORS to commerce mutations, requires merchant credentials or broad public APIs, bypasses provider identity/policy/consent/audit/idempotency, and allows client/model state to impersonate authority.                                       |
+| **Merchant-owned full chatbot runtime per deployment**                                                                           | Reject   | Duplicates provider UX, model, identity, payment, and policy maintenance across merchants and undermines the reusable product. Merchant hosting should supply only a thin script/configuration and, where selected, a connector runtime.                                    |
+| **MCP as merchant-facing product contract**                                                                                      | Reject   | MCP may be useful for provider-internal tool discovery, but model/tool schemas do not provide the stable merchant contract, tenant isolation, retries, idempotency, webhook semantics, or payment authorization boundary required here.                                     |
+
+### Role of MCP
+
+MCP is optional internal plumbing behind the provider BFF. The provider may expose canonical adapter
+operations as controlled internal tools if that helps the agent runtime discover capabilities, but
+MCP servers remain provider-owned, authenticated, policy-enforced, audited, and unavailable as an
+arbitrary merchant endpoint. Merchants integrate to the versioned adapter contract; they do not
+teach the model vendor-specific prompts or expose broad commerce tools to it. MCP cannot bypass the
+BFF, consent state, adapter validation, payment orchestration, idempotency, or reconciliation.
+
+### Decision consequences and implementation guardrails
+
+This decision makes the next implementation seams explicit without implementing them:
+
+1. Freeze a versioned adapter boundary and capability/error vocabulary before adding connector
+   branches to `chatbot-agent` or `payment-api`.
+2. Add one Northwind adapter/test double as the only commerce path in the Phase 1 exercise; remove
+   direct provider-seed catalog and direct payment checkout from that exercised path.
+3. Keep identity exchange and payment references server-side, replacing widget-held raw identity
+   tokens with an opaque provider session boundary.
+4. Add server-side consent bound to subject, merchant, exact authoritative cart/quote version,
+   amount/currency, payment reference, nonce, expiry, and correlation/idempotency keys.
+5. Use durable operation state and reconciliation for duplicate/timeout outcomes; local JSON
+   read-modify-write is not the production monetary boundary.
+6. Verify signed merchant events, deduplicate by event ID, and invalidate short-lived projections;
+   never use an event or browser redirect to overwrite merchant truth.
+
+These are target guardrails and follow-on work, not claims that the current repository implements
+them. The current evidence and gap register above remain unchanged as the Task 1 baseline.
 
 ## Gap register
 
