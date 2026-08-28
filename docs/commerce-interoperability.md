@@ -146,16 +146,22 @@ payment API after only a merchant ID comparison.
 
 ### 4. Payment API checkout and provider-local persistence
 
-The payment API checkout route requires a consent source and timestamp and checks basic user,
-card, cart, merchant, item, quantity, SKU, and currency shape. It then reads the provider-local
+The payment API checkout route requires a consent object with a source and timestamp and rejects
+missing or falsy `userId`, `selectedCardId`, or `cart`. It requires `cart.items` to be a non-empty
+array and `cart.merchantId` to be present and typed as a string. Because the request body is cast to
+`Cart` rather than runtime-schema-validated, these checks do not establish complete user, card, cart,
+or item shape validation: `userId` and `selectedCardId` are only string-cast, item SKU/object types are
+not checked, and the declared `cart.currency` is not runtime-validated before use. For each expected
+item, the route checks positive integer quantity, resolves its SKU against the provider-local catalog,
+and rejects mixed currencies among the matching provider products. It then reads the provider-local
 product catalog, recomputes the amount from provider product prices, appends a provider-local
-transaction, and returns a synthetic provider checkout session. This is a description of the
-current POC path, not a target ownership decision. There is no merchant checkout session, merchant
-order confirmation, merchant fulfillment response, or merchant webhook in this request path.
+transaction, and returns a synthetic provider checkout session. This is a description of the current
+POC path, not a target ownership decision. There is no merchant checkout session, merchant order
+confirmation, merchant fulfillment response, or merchant webhook in this request path.
 
 - [`apps/payment-api/src/app/api/checkout/route.ts#L1-L14`](../apps/payment-api/src/app/api/checkout/route.ts#L1-L14) describes the route as catalog-based transaction recording and loyalty accrual.
-- [`apps/payment-api/src/app/api/checkout/route.ts#L44-L100`](../apps/payment-api/src/app/api/checkout/route.ts#L44-L100) validates body-provided consent, `userId`, `selectedCardId`, cart presence, cart items, and merchant ID.
-- [`apps/payment-api/src/app/api/checkout/route.ts#L102-L149`](../apps/payment-api/src/app/api/checkout/route.ts#L102-L149) reads provider product JSON and derives the authoritative amount from that file.
+- [`apps/payment-api/src/app/api/checkout/route.ts#L44-L100`](../apps/payment-api/src/app/api/checkout/route.ts#L44-L100) validates body-provided consent and presence/type checks for `userId`, `selectedCardId`, cart, its items array, and merchant ID; the body is not fully runtime-schema-validated.
+- [`apps/payment-api/src/app/api/checkout/route.ts#L102-L149`](../apps/payment-api/src/app/api/checkout/route.ts#L102-L149) reads provider product JSON, validates positive integer quantities and SKU resolution, and derives the amount/currency from matching provider products.
 - [`apps/payment-api/src/app/api/checkout/route.ts#L151-L196`](../apps/payment-api/src/app/api/checkout/route.ts#L151-L196) reads provider merchant/transaction JSON and appends a captured transaction.
 - [`apps/payment-api/src/app/api/checkout/route.ts#L204-L246`](../apps/payment-api/src/app/api/checkout/route.ts#L204-L246) updates provider-local loyalty JSON as a best-effort side effect after the transaction write.
 - [`apps/payment-api/src/app/api/checkout/route.ts#L248-L264`](../apps/payment-api/src/app/api/checkout/route.ts#L248-L264) returns a provider-synthetic `CheckoutSession` with status `captured`.
@@ -310,6 +316,6 @@ state machine exists. It makes no vendor capability claim for Shopify, SAP Comme
 Commerce, or another merchant platform. It also does not alter runtime code, AIC configuration,
 seed data, merchant configuration, identity-provider state, or external resources.
 
-The evidence baseline is complete for the Task 1 scope. Later tasks may use this gap register as
-the current-state input when defining a target topology, canonical adapter contract, connector
-strategy, security controls, reliability model, and Phase 1 acceptance evidence.
+The evidence baseline covers the repository areas reviewed for the Task 1 scope. Later tasks may
+use this gap register as the current-state input when defining a target topology, canonical adapter
+contract, connector strategy, security controls, reliability model, and Phase 1 acceptance evidence.
