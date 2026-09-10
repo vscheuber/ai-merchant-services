@@ -130,11 +130,17 @@ async function start() {
   }
 
   mkdirSync(DATA_DIR, { recursive: true });
+  // Caddy 2.11+ removed the --data-dir/--config-dir flags; storage roots are
+  // set via XDG env vars instead (they resolve to <dir>/caddy/...).
   const child = spawn('caddy', [
     'run', '--config', CADDYFILE, '--adapter', 'caddyfile',
-    '--data-dir', DATA_DIR, '--config-dir', DATA_DIR,
     '--pidfile', PID_PATH,
-  ], { cwd: ROOT, detached: true, stdio: 'ignore' });
+  ], {
+    cwd: ROOT,
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, XDG_DATA_HOME: DATA_DIR, XDG_CONFIG_HOME: DATA_DIR },
+  });
   child.unref();
   const ownership = { pid: child.pid, mode: 'managed' };
   try {
