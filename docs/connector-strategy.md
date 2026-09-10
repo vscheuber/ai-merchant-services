@@ -332,7 +332,9 @@ Build Phase 1 against a **Northwind merchant-hosted test-double adapter implemen
 `generic.v1` profile**, exercised through a contract conformance suite, before any vendor-style
 connector is written. This matches the plan's Phase 1 slice (one Northwind demo adapter backed by a
 merchant-side test service or isolated fixture) and Contract §12 ("the conformance suite should run
-against a fake merchant first").
+against a fake merchant first"). The bounded slice definition, end-to-end acceptance scenario,
+failure-path injection set, and evidence plan for this double are defined in
+[`phase1-poc-slice.md`](./phase1-poc-slice.md).
 
 ### 9.2 Why this one first
 

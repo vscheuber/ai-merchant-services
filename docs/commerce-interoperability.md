@@ -9,8 +9,9 @@ production readiness. The canonical adapter contract is defined in
 Shopify-, SAP-, and Oracle-style merchants and the generic custom adapter is in
 [`connector-strategy.md`](./connector-strategy.md); the identity, token-flow, and API authorization
 controls are in [`commerce-security-identity.md`](./commerce-security-identity.md); the checkout
-reliability and recovery model is in [`checkout-reliability.md`](./checkout-reliability.md). The
-Phase 1 implementation backlog remains a follow-on task.
+reliability and recovery model is in [`checkout-reliability.md`](./checkout-reliability.md); the
+Phase 1 slice definition and integration acceptance evidence plan is in
+[`phase1-poc-slice.md`](./phase1-poc-slice.md).
 
 The current-state section records behavior observed in the checked-in repository. The target
 architecture section is explicitly future-state and is not evidence that any proposed component

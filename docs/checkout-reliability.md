@@ -356,5 +356,6 @@ binding, and reconciliation as in-chat checkout — only the payment surface cha
   boundaries, gap register G-01..G-12.
 - [`connector-strategy.md`](./connector-strategy.md) — capability-gap fallbacks (§7), the Phase 1
   Northwind `generic.v1` test double (§9), and fixture representativeness (§8).
-- Phase 1 acceptance evidence and scenario selection are defined by the Phase 1 backlog task and
-  are out of scope here.
+- Phase 1 acceptance evidence and scenario selection are defined in
+  [`phase1-poc-slice.md`](./phase1-poc-slice.md), which maps the §3 sequence and §7 failure modes
+  onto the Northwind test double and the demo environment.
