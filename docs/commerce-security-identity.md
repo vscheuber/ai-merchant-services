@@ -389,7 +389,8 @@ Listed as follow-up seams only — none exist today:
    audience-bound BFF session artifact (G-08), and derive all authority server-side (G-07).
 3. Shared auth/request types carrying the server-derived subject/agent/merchant context described
    by Contract §3.2 `SubjectContext`.
-4. Consent/operation/idempotency storage per Task 6 (reliability model).
+4. Consent/operation/idempotency storage per Task 6 (reliability model, specified in
+   [`checkout-reliability.md`](./checkout-reliability.md)).
 5. [`identity.md`](./identity.md) alignment when the deployment model above changes current
    behavior.
 6. DPoP/sender-constraint assessment (§4.5) once the session boundary is implemented.
