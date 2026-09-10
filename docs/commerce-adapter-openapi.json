@@ -1,0 +1,3795 @@
+{
+  "openapi": "3.1.1",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Merchant Commerce Adapter",
+    "version": "1.0.0",
+    "description": "Complete machine-readable platform-neutral merchant-authoritative commerce contract, merchant-commerce-adapter/v1. All operation request and response schemas are defined in the adjacent commerce-adapter-schemas.json file."
+  },
+  "servers": [
+    {
+      "url": "/v1",
+      "description": "Relative deployment base path; the merchant/provider deployment supplies the origin."
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Capabilities"
+    },
+    {
+      "name": "Catalog"
+    },
+    {
+      "name": "Customer"
+    },
+    {
+      "name": "Cart"
+    },
+    {
+      "name": "Checkout"
+    },
+    {
+      "name": "Payment"
+    },
+    {
+      "name": "Order"
+    },
+    {
+      "name": "Operations"
+    },
+    {
+      "name": "Events"
+    }
+  ],
+  "paths": {
+    "/capabilities": {
+      "get": {
+        "operationId": "discoverCapabilities",
+        "summary": "Discover supported adapter capabilities",
+        "description": "Discovery is authenticated and returns a versioned capability document with an explicit expiry. It has no HTTP idempotency key. Required capability: `capability.discovery`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Capabilities"],
+        "x-capability": "capability.discovery",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CapabilityDocument"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/AdapterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/search": {
+      "post": {
+        "operationId": "searchCatalog",
+        "summary": "Search merchant catalog",
+        "description": "Required capability: `catalog.search`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Catalog"],
+        "x-capability": "catalog.search",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/SearchCatalogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/SearchCatalogResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/SearchCatalogResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/products/{productRef}": {
+      "get": {
+        "operationId": "getProduct",
+        "summary": "Get merchant product",
+        "description": "Required capability: `catalog.product`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Catalog"],
+        "x-capability": "catalog.product",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/ProductRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetProductResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/availability": {
+      "post": {
+        "operationId": "checkAvailability",
+        "summary": "Check availability for requested lines",
+        "description": "Required capability: `catalog.availability`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Catalog"],
+        "x-capability": "catalog.availability",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CheckAvailabilityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CheckAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CheckAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cart/quote": {
+      "post": {
+        "operationId": "quoteCart",
+        "summary": "Resolve an authoritative quote",
+        "description": "Quote creation is a read-like resolution unless the capability declares a reservation; in that case the adapter applies mutation idempotency. Required capability: `commerce.quote`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "commerce.quote",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyOptional"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/QuoteCartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/QuoteCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/QuoteCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{customerRef}": {
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Get an allowlisted customer projection",
+        "description": "Required capability: `customer.lookup`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Customer"],
+        "x-capability": "customer.lookup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CustomerRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetCustomerResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetCustomerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{customerRef}/loyalty": {
+      "get": {
+        "operationId": "getLoyalty",
+        "summary": "Get an allowlisted loyalty projection",
+        "description": "Required capability: `loyalty.lookup`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Customer"],
+        "x-capability": "loyalty.lookup",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CustomerRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetLoyaltyResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetLoyaltyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts": {
+      "post": {
+        "operationId": "createCart",
+        "summary": "Create authoritative merchant cart",
+        "description": "Required capability: `cart.create`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "cart.create",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/{cartRef}": {
+      "get": {
+        "operationId": "getCart",
+        "summary": "Read authoritative merchant cart",
+        "description": "Required capability: `cart.read`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "cart.read",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CartRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateCart",
+        "summary": "Update authoritative merchant cart",
+        "description": "Required capability: `cart.update`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "cart.update",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CartRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/UpdateCartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/UpdateCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/UpdateCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/{cartRef}/validate": {
+      "post": {
+        "operationId": "validateCart",
+        "summary": "Validate merchant cart and resolve deltas",
+        "description": "Required capability: `cart.validate`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "cart.validate",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CartRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/ValidateCartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ValidateCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ValidateCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/{cartRef}/reconcile": {
+      "post": {
+        "operationId": "reconcileCart",
+        "summary": "Reconcile conversational proposal into merchant cart",
+        "description": "Required capability: `cart.reconcile`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "cart.reconcile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CartRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/ReconcileCartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ReconcileCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ReconcileCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/{cartRef}/expire": {
+      "post": {
+        "operationId": "expireCart",
+        "summary": "Expire authoritative merchant cart",
+        "description": "Required capability: `cart.expire`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Cart"],
+        "x-capability": "cart.expire",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CartRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/ExpireCartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ExpireCartResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ExpireCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkouts": {
+      "post": {
+        "operationId": "createCheckoutSession",
+        "summary": "Create merchant checkout session",
+        "description": "Required capability: `checkout.create`. Merchant scope and correlation are server-authenticated. The `checkout.redirect` capability is declared separately when hosted-checkout fallback is available.",
+        "tags": ["Checkout"],
+        "x-capability": "checkout.create",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCheckoutSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkouts/{checkoutRef}": {
+      "get": {
+        "operationId": "getCheckoutSession",
+        "summary": "Read merchant checkout session",
+        "description": "Required capability: `checkout.read`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Checkout"],
+        "x-capability": "checkout.read",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CheckoutRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetCheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetCheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkouts/{checkoutRef}/cancel": {
+      "post": {
+        "operationId": "cancelCheckoutSession",
+        "summary": "Cancel merchant checkout session",
+        "description": "Required capability: `checkout.cancel`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Checkout"],
+        "x-capability": "checkout.cancel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CheckoutRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CancelCheckoutSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CancelCheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CancelCheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkouts/{checkoutRef}/payment/authorize": {
+      "post": {
+        "operationId": "authorizePayment",
+        "summary": "Authorize payment through server-bound reference",
+        "description": "Required capability: `payment.authorize`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Payment"],
+        "x-capability": "payment.authorize",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CheckoutRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/AuthorizePaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/AuthorizePaymentResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/AuthorizePaymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkouts/{checkoutRef}/payment/capture": {
+      "post": {
+        "operationId": "capturePayment",
+        "summary": "Capture an authorized payment",
+        "description": "Required capability: `payment.capture`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Payment"],
+        "x-capability": "payment.capture",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CheckoutRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CapturePaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CapturePaymentResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CapturePaymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "createOrder",
+        "summary": "Create merchant order",
+        "description": "Required capability: `order.create`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Order"],
+        "x-capability": "order.create",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CreateOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CreateOrderResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CreateOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkouts/{checkoutRef}/confirm": {
+      "post": {
+        "operationId": "confirmOrder",
+        "summary": "Confirm merchant order for checkout",
+        "description": "Required capability: `order.confirm`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Order"],
+        "x-capability": "order.confirm",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/CheckoutRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/ConfirmOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ConfirmOrderResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/ConfirmOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderRef}": {
+      "get": {
+        "operationId": "getOrder",
+        "summary": "Read merchant order",
+        "description": "Required capability: `order.read`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Order"],
+        "x-capability": "order.read",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/OrderRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetOrderResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderRef}/cancel": {
+      "post": {
+        "operationId": "cancelOrder",
+        "summary": "Cancel merchant order",
+        "description": "Required capability: `order.cancel`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Order"],
+        "x-capability": "order.cancel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/OrderRef"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CancelOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CancelOrderResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/CancelOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderRef}/fulfillment": {
+      "get": {
+        "operationId": "getFulfillmentStatus",
+        "summary": "Read fulfillment status",
+        "description": "Required capability: `fulfillment.status`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Order"],
+        "x-capability": "fulfillment.status",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/OrderRef"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetFulfillmentStatusResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetFulfillmentStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/{operationId}": {
+      "get": {
+        "operationId": "getOperationStatus",
+        "summary": "Reconcile an accepted or unknown operation",
+        "description": "Required capability: `operation.status`. Merchant scope and correlation are server-authenticated.",
+        "tags": ["Operations"],
+        "x-capability": "operation.status",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/OperationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetOperationStatusResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Adapter response",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/GetOperationStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "post": {
+        "operationId": "handleWebhook",
+        "summary": "Receive normalized merchant CloudEvent",
+        "description": "Webhook processing does not use Idempotency-Key. The receiver authenticates the request and deduplicates valid events by the CloudEvents identity tuple `(source, id)` before applying effects. Required capability: `events.webhook`.",
+        "tags": ["Events"],
+        "x-capability": "events.webhook",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MerchantId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/cloudevents+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/CloudEvent"
+              }
+            },
+            "application/vnd.merchant-commerce.v1+json": {
+              "schema": {
+                "$ref": "./commerce-adapter-schemas.json#/$defs/WebhookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted or safely acknowledged duplicate event",
+            "content": {
+              "application/vnd.merchant-commerce.v1+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/WebhookAck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RFC 9457 Problem Details",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "OAuth 2.0 access token; audience/resource and merchant scope are deployment-bound."
+      }
+    },
+    "parameters": {
+      "MerchantId": {
+        "name": "X-Merchant-Id",
+        "in": "header",
+        "required": true,
+        "description": "Authenticated merchant scope; a body value cannot widen it.",
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/ResourceRef"
+        }
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-Id",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/CorrelationId"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Required for state-changing HTTP operations. It identifies one mutation and is not used for webhook event deduplication.",
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/IdempotencyKey"
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": false,
+        "description": "Required when the capability advertises optimistic concurrency.",
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/Version"
+        }
+      },
+      "CartRef": {
+        "name": "cartRef",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/ResourceRef"
+        }
+      },
+      "CheckoutRef": {
+        "name": "checkoutRef",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/ResourceRef"
+        }
+      },
+      "OrderRef": {
+        "name": "orderRef",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/ResourceRef"
+        }
+      },
+      "OperationId": {
+        "name": "operationId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        }
+      },
+      "ProductRef": {
+        "name": "productRef",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/ResourceRef"
+        }
+      },
+      "CustomerRef": {
+        "name": "customerRef",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/ResourceRef"
+        }
+      },
+      "IdempotencyKeyOptional": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Optional for quote resolution; required when the declared quote capability creates a reservation or other state change. It is not used for webhook event deduplication.",
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/IdempotencyKey"
+        }
+      }
+    },
+    "headers": {
+      "CorrelationId": {
+        "description": "Correlation ID echoed by the adapter.",
+        "schema": {
+          "$ref": "./commerce-adapter-schemas.json#/$defs/CorrelationId"
+        }
+      }
+    },
+    "schemas": {
+      "CapabilityDocument": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CapabilityDocument"
+      },
+      "AdapterResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/AdapterResponse"
+      },
+      "Problem": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+      },
+      "CloudEvent": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CloudEvent"
+      },
+      "WebhookAck": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/WebhookAck"
+      },
+      "SearchCatalogRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/SearchCatalogRequest"
+      },
+      "GetProductRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetProductRequest"
+      },
+      "CheckAvailabilityRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CheckAvailabilityRequest"
+      },
+      "QuoteCartRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/QuoteCartRequest"
+      },
+      "CustomerRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CustomerRequest"
+      },
+      "LoyaltyRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/LoyaltyRequest"
+      },
+      "CreateCartRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCartRequest"
+      },
+      "UpdateCartRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/UpdateCartRequest"
+      },
+      "ValidateCartRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ValidateCartRequest"
+      },
+      "ReconcileCartRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ReconcileCartRequest"
+      },
+      "ExpireCartRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ExpireCartRequest"
+      },
+      "CreateCheckoutSessionRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCheckoutSessionRequest"
+      },
+      "CancelCheckoutSessionRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CancelCheckoutSessionRequest"
+      },
+      "AuthorizePaymentRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/AuthorizePaymentRequest"
+      },
+      "CapturePaymentRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CapturePaymentRequest"
+      },
+      "CreateOrderRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CreateOrderRequest"
+      },
+      "ConfirmOrderRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ConfirmOrderRequest"
+      },
+      "CancelOrderRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CancelOrderRequest"
+      },
+      "WebhookRequest": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/WebhookRequest"
+      },
+      "AuthorizePaymentResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/AuthorizePaymentResponse"
+      },
+      "CancelCheckoutSessionResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CancelCheckoutSessionResponse"
+      },
+      "CancelOrderResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CancelOrderResponse"
+      },
+      "CapturePaymentResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CapturePaymentResponse"
+      },
+      "CheckAvailabilityResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CheckAvailabilityResponse"
+      },
+      "ConfirmOrderResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ConfirmOrderResponse"
+      },
+      "CreateCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCartResponse"
+      },
+      "CreateCheckoutSessionResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CreateCheckoutSessionResponse"
+      },
+      "CreateOrderResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/CreateOrderResponse"
+      },
+      "ExpireCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ExpireCartResponse"
+      },
+      "GetCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetCartResponse"
+      },
+      "GetCheckoutSessionResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetCheckoutSessionResponse"
+      },
+      "GetCustomerResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetCustomerResponse"
+      },
+      "GetFulfillmentStatusResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetFulfillmentStatusResponse"
+      },
+      "GetLoyaltyResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetLoyaltyResponse"
+      },
+      "GetOperationStatusResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetOperationStatusResponse"
+      },
+      "GetOrderResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetOrderResponse"
+      },
+      "GetProductResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/GetProductResponse"
+      },
+      "QuoteCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/QuoteCartResponse"
+      },
+      "ReconcileCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ReconcileCartResponse"
+      },
+      "SearchCatalogResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/SearchCatalogResponse"
+      },
+      "UpdateCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/UpdateCartResponse"
+      },
+      "ValidateCartResponse": {
+        "$ref": "./commerce-adapter-schemas.json#/$defs/ValidateCartResponse"
+      }
+    },
+    "responses": {
+      "AdapterResponse": {
+        "description": "Adapter response",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/vnd.merchant-commerce.v1+json": {
+            "schema": {
+              "$ref": "./commerce-adapter-schemas.json#/$defs/AdapterResponse"
+            }
+          }
+        }
+      },
+      "Problem": {
+        "description": "RFC 9457 Problem Details",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "./commerce-adapter-schemas.json#/$defs/Problem"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-contract-version": "merchant-commerce-adapter/v1",
+  "x-canonical-operation-aliases": {
+    "mutateCart": ["updateCart", "reconcileCart"],
+    "authorizeOrCapturePayment": ["authorizePayment", "capturePayment"],
+    "httpMutationIdempotency": "Idempotency-Key is required for state-changing HTTP operations; it is distinct from webhook event deduplication by (source, id)."
+  },
+  "x-capability-vocabulary": "Every canonical operation has an x-capability annotation; checkout.redirect is an adjunct capability required for redirect fallback, not a separate operation."
+}
