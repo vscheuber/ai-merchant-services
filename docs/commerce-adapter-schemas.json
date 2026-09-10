@@ -227,7 +227,8 @@
           "$ref": "#/$defs/ResponseMeta"
         },
         "status": {
-          "$ref": "#/$defs/Status"
+          "$ref": "#/$defs/Status",
+          "description": "Generic operation outcome; merchant domain lifecycle states are carried on the typed data payload (see CheckoutData.status, PaymentData.status, OrderData.status, CartData.status, FulfillmentData.status)."
         },
         "data": {},
         "warnings": {

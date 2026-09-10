@@ -167,6 +167,16 @@ document:
   canonical capability, including explicitly unsupported entries.
 - `CloudEvent` and `WebhookAck` define the normalized event input and safe duplicate acknowledgment.
 
+Adapter responses carry two distinct status layers. The envelope `status` (schema `Status`) is the
+generic operation outcome — one of `succeeded`, `accepted`, `running`, `requires_action`, `pending`,
+`unknown`, `failed`, or `cancelled` — and describes whether and how the operation completed, not the
+merchant lifecycle. The domain state of the affected commerce resource is carried machine-readably in
+the typed `data` payload: `CheckoutData.status`, `PaymentData.status`, `OrderData.status`,
+`CartData.status`, and `FulfillmentData.status` each carry their own enum. Provider logic MUST branch
+on the envelope `status` for operation control flow (retry, reconciliation, deadline handling) and on
+the domain `data.*.status` for payment and order lifecycle decisions. Provider logic MUST NOT infer
+payment or order lifecycle from the envelope `status` alone.
+
 The schemas set `additionalProperties: false` on core objects. Optional connector data is permitted
 only through `x-` namespaced extension maps. A connector MUST validate both request and response
 instances against the selected version before invoking or returning a native platform payload.
@@ -431,9 +441,14 @@ keys. The adapter sees only a provider payment reference or an approved merchant
 It MUST NOT receive raw PAN, CVV, wallet secret, access token, or a client-selected card identifier.
 
 An order may be created before or after payment only according to the merchant's declared profile.
-The adapter MUST return an explicit state such as `payment_pending`, `authorized`, `captured`,
-`order_pending`, `confirmed`, `declined`, `requires_action`, `cancelled`, or `unknown`. The provider
-MUST report an order as confirmed only after a merchant-authoritative order response or verified event.
+The adapter MUST return the merchant lifecycle state machine-readably in the typed response `data` —
+payment state per `PaymentData.status` (`pending`, `requires_action`, `authorized`, `captured`,
+`declined`, `cancelled`, or `unknown`), order state per `OrderData.status` (`pending`, `confirmed`,
+`cancelled`, or `unknown`), and checkout state per `CheckoutData.status` — while the envelope `status`
+follows the generic operation vocabulary of Section 3.3. Native states such as a merchant
+"payment pending" or "order pending" map to the domain `pending` value within `PaymentData` or
+`OrderData` respectively, not to the envelope `status`. The provider MUST report an order as confirmed
+only after a merchant-authoritative order response or verified event.
 
 ### 5.5 Operation status and unknown outcomes
 

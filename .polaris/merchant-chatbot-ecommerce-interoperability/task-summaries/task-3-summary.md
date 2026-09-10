@@ -120,3 +120,50 @@ TypeScript types, connectors, payment resources, webhook endpoints, or live iden
   implementation was introduced.
 - No review file was present at the requested Task 3 path in the checkout; the requested findings were
   applied from the user-provided review summary.
+
+## Fix Iteration 2
+
+### Status
+
+**DONE**
+
+### Review findings addressed
+
+Important 3: `AdapterResponse.status` allowed only generic operation states while Section 5.4 required
+explicit payment/order states such as `payment_pending`/`order_pending`, which appear in no schema;
+the two status layers were not linked normatively.
+
+- `docs/commerce-adapter-contract.md` Section 3.3: added a normative paragraph after the shared
+  vocabulary list defining the two status layers — the envelope `status` (schema `Status`) is the
+  generic operation outcome (succeeded/accepted/running/requires_action/pending/unknown/failed/
+  cancelled) describing whether and how the operation completed, while the merchant domain lifecycle
+  state is carried machine-readably on the typed `data` payload (`CheckoutData.status`,
+  `PaymentData.status`, `OrderData.status`, `CartData.status`, `FulfillmentData.status`, each with its
+  own enum). Provider logic MUST branch on the envelope `status` for operation control flow and on the
+  domain `data.*.status` for payment/order lifecycle decisions, and MUST NOT infer payment or order
+  lifecycle from the envelope `status` alone.
+- `docs/commerce-adapter-contract.md` Section 5.4: rewrote the offending sentence so the required
+  explicit states are the schema enums — payment state per `PaymentData.status`, order state per
+  `OrderData.status`, checkout state per `CheckoutData.status` — with the envelope `status` following
+  the generic operation vocabulary of Section 3.3. Removed the invented strings `payment_pending` and
+  `order_pending`; a clause now states that such native states map to the domain `pending` value
+  within `PaymentData` or `OrderData`, not to the envelope `status`. The existing rule that the
+  provider reports an order as confirmed only after a merchant-authoritative response or verified
+  event is preserved.
+- `docs/commerce-adapter-schemas.json`: added a `description` on `AdapterResponse.status` (as a
+  JSON Schema 2020-12 sibling of the `$ref`) pointing to the domain status fields on the typed data
+  payload. No enum values were changed; no other schema content was modified.
+- `docs/commerce-adapter-openapi.json`: unchanged (it only references the schemas file).
+
+### Fix Iteration 2 verification
+
+- `pnpm exec prettier --check docs/commerce-adapter-contract.md docs/commerce-adapter-schemas.json
+  docs/commerce-adapter-openapi.json` passed.
+- `python3 -c "import json;json.load(open('docs/commerce-adapter-schemas.json'))"` passed; same for
+  `docs/commerce-adapter-openapi.json`.
+- `git diff --check` passed.
+- `pnpm lint` was not run (known pre-existing failures in unrelated script files, per dispatch).
+
+### Fix Iteration 2 deviations
+
+- None; all edits were surgical and within the documentation-only scope.
