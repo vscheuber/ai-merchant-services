@@ -11,7 +11,9 @@ Shopify-, SAP-, and Oracle-style merchants and the generic custom adapter is in
 controls are in [`commerce-security-identity.md`](./commerce-security-identity.md); the checkout
 reliability and recovery model is in [`checkout-reliability.md`](./checkout-reliability.md); the
 Phase 1 slice definition and integration acceptance evidence plan is in
-[`phase1-poc-slice.md`](./phase1-poc-slice.md).
+[`phase1-poc-slice.md`](./phase1-poc-slice.md); and the consolidated review-ready assessment —
+requirements traceability, decision log, migration backlog, risk register, and reviewer checklist —
+is in [`commerce-assessment.md`](./commerce-assessment.md).
 
 The current-state section records behavior observed in the checked-in repository. The target
 architecture section is explicitly future-state and is not evidence that any proposed component
