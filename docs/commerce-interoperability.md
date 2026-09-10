@@ -4,8 +4,11 @@
 
 **Document status:** Task 1 current-state evidence baseline and gap register, plus the Task 2 target
 architecture decision. The target is a recommendation, not an implementation or a claim of
-production readiness. The canonical adapter contract, connector comparison, security detail,
-reliability model, and Phase 1 implementation backlog remain follow-on tasks.
+production readiness. The canonical adapter contract is defined in
+[`commerce-adapter-contract.md`](./commerce-adapter-contract.md); the connector strategy for
+Shopify-, SAP-, and Oracle-style merchants and the generic custom adapter is in
+[`connector-strategy.md`](./connector-strategy.md). The security detail, reliability model, and
+Phase 1 implementation backlog remain follow-on tasks.
 
 The current-state section records behavior observed in the checked-in repository. The target
 architecture section is explicitly future-state and is not evidence that any proposed component

@@ -919,6 +919,7 @@ reconciled with the authoritative merchant cart/checkout references defined here
 ## 13. Related decisions and sources
 
 - [Commerce interoperability assessment and target architecture](./commerce-interoperability.md)
+- [Connector strategy for Shopify-, SAP-, Oracle-, and custom-style merchants](./connector-strategy.md)
 - [Project requirements](../.polaris/merchant-chatbot-ecommerce-interoperability/requirements.md)
 - [Implementation plan](../.polaris/merchant-chatbot-ecommerce-interoperability/plan.md)
 - [HTTP Semantics (RFC 9110)](https://www.rfc-editor.org/rfc/rfc9110)
