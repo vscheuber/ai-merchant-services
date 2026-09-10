@@ -207,11 +207,11 @@ capability.discovery       catalog.search          catalog.product
 catalog.availability       commerce.quote          customer.lookup
 loyalty.lookup             cart.create             cart.read
 cart.update                cart.validate           cart.reconcile
-cart.expire                checkout.create         checkout.read
-checkout.cancel            payment.authorize       payment.capture
-order.create               order.confirm           order.read
-order.cancel               fulfillment.status      operation.status
-events.webhook
+cart.expire                checkout.create         checkout.redirect
+checkout.read              checkout.cancel         payment.authorize
+payment.capture            order.create            order.confirm
+order.read                 order.cancel            fulfillment.status
+operation.status           events.webhook
 ```
 
 A conforming capability document is represented by the following complete JSON shape (the full
