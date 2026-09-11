@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from '@acme/ui'
 import { auth } from '../../auth'
+import { HeaderActions } from '../../components/header-actions'
 
 const nav = [
   { label: 'Transactions', href: '/transactions' },
@@ -54,7 +55,12 @@ export default async function MerchantsPage() {
   }
 
   return (
-    <AppShell brand="Acme Payments Admin" tagline="Internal dashboard" nav={nav}>
+    <AppShell
+      brand="Acme Payments Admin"
+      tagline="Internal dashboard"
+      nav={nav}
+      actions={<HeaderActions />}
+    >
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Merchants</p>
         <h1 className="text-3xl font-semibold tracking-tight">Onboarded merchants</h1>

@@ -8,7 +8,7 @@
 // Next.js App Router requires a default export.
 
 import { redirect } from 'next/navigation'
-import type { Transaction } from '@acme/shared'
+import type { MerchantIdentity, Transaction } from '@acme/shared'
 import {
   AppShell,
   Card,
@@ -18,12 +18,21 @@ import {
   CardTitle,
 } from '@acme/ui'
 import { auth } from '../../auth'
+import { HeaderActions } from '../../components/header-actions'
 
 const nav = [
   { label: 'Transactions', href: '/transactions' },
   { label: 'Users', href: '/users' },
   { label: 'Merchants', href: '/merchants' },
 ] as const
+
+/**
+ * A resolved user, with an optional trace back to the merchant-side customer
+ * — populated only for JIT-provisioned (alpha-only) identities that
+ * GET /api/users/:id resolved via a live IDM read rather than the local
+ * seed registry.
+ */
+type ResolvedUser = MerchantIdentity & { merchantCustomerId?: string }
 
 function formatAmount(txn: Transaction): string {
   return new Intl.NumberFormat('en-US', {
@@ -92,10 +101,61 @@ export default async function TransactionsPage() {
     fetchError = 'Unable to connect to the payment API. Please try again later.'
   }
 
+  // Best-effort name lookup — same registry the Users page reads (seed
+  // MerchantIdentity records, keyed by the demo users' real bravo-realm
+  // UUID). A transaction's `userId` can also be a live JIT-provisioned
+  // alpha_user UUID (e.g. from a chatbot purchase) that never appears in the
+  // local seed list; those are resolved individually below via
+  // GET /api/users/:id, which falls back to a live IDM read.
+  const usersById = new Map<string, ResolvedUser>()
+  try {
+    const res = await fetch(`${baseUrl}/api/users`, {
+      headers: {
+        Authorization: `Bearer ${session.accessToken ?? ''}`,
+      },
+      cache: 'no-store',
+    })
+    if (res.ok) {
+      const users = (await res.json()) as MerchantIdentity[]
+      for (const user of users) usersById.set(user.id, user)
+    }
+  } catch {
+    // Non-fatal — falls through to the per-id resolution below, and
+    // ultimately to raw ids for every row if that fails too.
+  }
+
+  // Resolve any userId the seed list didn't cover (live JIT identities) in
+  // parallel, one request per unique unresolved id.
+  const unresolvedIds = [...new Set(transactions.map((t) => t.userId))].filter(
+    (id) => !usersById.has(id),
+  )
+  await Promise.all(
+    unresolvedIds.map(async (id) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/users/${encodeURIComponent(id)}`, {
+          headers: {
+            Authorization: `Bearer ${session.accessToken ?? ''}`,
+          },
+          cache: 'no-store',
+        })
+        if (res.ok) {
+          usersById.set(id, (await res.json()) as ResolvedUser)
+        }
+      } catch {
+        // Non-fatal — that row falls back to showing the raw id.
+      }
+    }),
+  )
+
   const groups = groupByMerchant(transactions)
 
   return (
-    <AppShell brand="Acme Payments Admin" tagline="Internal dashboard" nav={nav}>
+    <AppShell
+      brand="Acme Payments Admin"
+      tagline="Internal dashboard"
+      nav={nav}
+      actions={<HeaderActions />}
+    >
       <section className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Transactions</p>
         <h1 className="text-3xl font-semibold tracking-tight">Funnel per merchant</h1>
@@ -145,12 +205,34 @@ export default async function TransactionsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {group.rows.map((txn) => (
+                      {group.rows.map((txn) => {
+                        const user = usersById.get(txn.userId)
+                        return (
                         <tr key={txn.id} className="border-b border-border/60 last:border-0">
                           <td className="py-3 pr-4 text-muted-foreground">
                             {formatDate(txn.createdAt)}
                           </td>
-                          <td className="py-3 pr-4 font-medium text-foreground">{txn.userId}</td>
+                          <td className="py-3 pr-4">
+                            {user ? (
+                              <>
+                                <div className="font-medium text-foreground">
+                                  {user.givenName} {user.sn}
+                                </div>
+                                {/* Prefer the merchant customer id over the transaction's own
+                                    stored userId — for a row keyed by a JIT-provisioned alpha
+                                    id (e.g. a pre-fix legacy purchase), that raw id is a
+                                    throwaway identifier, not the shopper's actual merchant
+                                    identity, so it isn't worth surfacing as a second value.
+                                    Rows already keyed by the merchant customer id show the
+                                    same value either way. */}
+                                <div className="text-xs text-muted-foreground">
+                                  {user.merchantCustomerId ?? txn.userId}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="font-medium text-foreground">{txn.userId}</span>
+                            )}
+                          </td>
                           <td className="py-3 pr-4 capitalize text-muted-foreground">
                             {txn.consent.source}
                           </td>
@@ -161,7 +243,8 @@ export default async function TransactionsPage() {
                             {formatAmount(txn)}
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
