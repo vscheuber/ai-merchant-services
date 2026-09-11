@@ -185,6 +185,36 @@ interface UserContext {
 }
 
 /**
+ * Resolve a payment token's `sub` — the JIT-provisioned alpha_user's own
+ * `_id`, freshly minted per merchant-token-login provisioning event — to the
+ * shopper's stable merchant-side customer id (`custom_merchantCustomerId` on
+ * that same alpha_user record). Loyalty and wallet data (and new
+ * transactions written at checkout) are keyed by that stable id, not by the
+ * ephemeral alpha `_id`, so this must run before any of those calls for
+ * lookups to actually find the shopper's data.
+ *
+ * Best-effort: falls back to the original id on any failure (missing IDM
+ * config on payment-api, network error, no `custom_merchantCustomerId` on
+ * the record — e.g. a merchant with no such binding). Never blocks the
+ * normal chat/checkout flow; a caller with no resolvable binding just keeps
+ * querying by the id it already had, exactly as before this resolution step
+ * existed.
+ */
+async function resolveMerchantCustomerId(agentToken: string, userId: string): Promise<string> {
+  const baseUrl = (process.env.PAYMENT_API_BASE_URL ?? 'http://localhost:3003').replace(/\/$/, '');
+  try {
+    const res = await fetch(`${baseUrl}/api/users/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bearer ${agentToken}` },
+    });
+    if (!res.ok) return userId;
+    const record = (await res.json()) as { merchantCustomerId?: unknown };
+    return typeof record.merchantCustomerId === 'string' ? record.merchantCustomerId : userId;
+  } catch {
+    return userId;
+  }
+}
+
+/**
  * Fetch the shopper's loyalty balance and saved wallet cards from the payment-api.
  *
  * Uses the northwind-chatbot-agent token (from Step 2) as the Bearer credential so that
@@ -269,6 +299,13 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null, mer
     shopperSection,
     '',
     '## Instructions',
+    '- The shopper has already been greeted by name in the chat widget before this conversation',
+    '  begins (and, if they just signed in, welcomed back with a note that loyalty/card access is',
+    '  now available) — you never see that greeting in this conversation, but it already happened.',
+    '  Do not repeat it: never open your own reply with a greeting or a "Welcome to',
+    `  ${merchantName}"-style preamble. If the shopper's first message is just a casual greeting`,
+    '  (e.g. "hi"), respond briefly and naturally — invite them to say what they\'re looking for —',
+    '  without a formal welcome.',
     '- Help shoppers discover and evaluate products from the the merchant catalog above.',
     '- Guest shoppers may browse and ask product questions without signing in.',
     '- Members-only deals require an authenticated shopper session; guests may see the public price but must be told to sign in to unlock the member price.',
@@ -517,6 +554,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Fetch shopper context (loyalty + wallet cards) using the agent token.
     // Only proceed when agentToken is non-null (Step 2 succeeded).
     if (userId && agentToken) {
+      // Resolve the ephemeral alpha `_id` to the shopper's stable
+      // merchant-side customer id before querying anything keyed by it.
+      // Reassigning `userId` here (rather than introducing a second
+      // variable) means every downstream reference — the checkout
+      // confirmation path's cart.userId included — automatically uses the
+      // resolved id too.
+      userId = await resolveMerchantCustomerId(agentToken, userId);
       try {
         userCtx = await fetchUserContext(agentToken, userId, merchantId);
       } catch {
@@ -556,9 +600,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       const noCardMsg: ChatResponse = {
         message: {
           role: 'assistant',
+          // Merchant-neutral wording — the shopper has no relationship with
+          // the payment provider to reference; this matches the existing
+          // "No saved cards on file. Add a card in your account." copy on
+          // merchant-web's own checkout form (checkout-form.tsx).
           content:
-            "I couldn't complete the purchase because no saved payment card was found in your wallet. " +
-            'Please add a card to your Acme Payments account and try again.',
+            "I couldn't complete the purchase because no saved payment card was found on file. " +
+            'Please add a card in your account and try again.',
         },
         ...(merchantTokenOut ? { merchantToken: merchantTokenOut } : {}),
         identity,

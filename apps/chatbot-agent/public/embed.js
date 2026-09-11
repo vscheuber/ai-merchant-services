@@ -168,6 +168,20 @@
   var ssoInFlight = false;
   /** True once a silent-SSO attempt has run (success or fallback) — attempted only once per page load. */
   var ssoAttempted = false;
+  /**
+   * One-shot override that lets `attemptSilentSso` run again after `ssoAttempted`
+   * is already true. Set when the backend reports a merchant credential we just
+   * sent (a one-time PKCE code or a cached merchant token) did not authenticate
+   * — e.g. the code expired between the popup completing and the shopper's
+   * first message. Consumed (reset to false) as soon as the retry runs.
+   */
+  var ssoRetryAvailable = false;
+  /**
+   * Caps automatic silent-SSO retries for the page's lifetime so a persistently
+   * rejected merchant session (not just a one-off expired code) falls back to
+   * guest mode for good instead of popping a fresh SSO popup on every message.
+   */
+  var ssoRetriesRemaining = 1;
 
   /** Ordered conversation turns for the LLM (system turns excluded). */
   var messageHistory = []; // { role: 'user'|'assistant', content: string }[]
@@ -486,6 +500,9 @@
 
   /** Cache a merchant ID token the backend just exchanged from our one-time code. */
   function cacheMerchantTokenFromResponse(data) {
+    // Captured before any mutation below: did we send a merchant credential
+    // (code or cached token) on the request that produced this response?
+    var hadCredential = hasMerchantCredential();
     if (data && data.merchantToken) {
       merchantToken = data.merchantToken;
       merchantAuthCode = null;
@@ -502,6 +519,23 @@
             ? 'Welcome back, ' + name + '. I can now use your loyalty details and saved cards.'
             : 'Welcome back. I can now use your loyalty details and saved cards.',
         );
+      }
+      if (!identity.authenticated && hadCredential) {
+        // The credential we just sent (one-time PKCE code or cached merchant
+        // token) did not authenticate server-side — most commonly a code that
+        // expired between the silent-SSO popup completing and the shopper's
+        // first message. Drop it; resending a dead credential forever would
+        // otherwise permanently strand the shopper in guest mode. Grant a
+        // single follow-up silent-SSO attempt (budget-capped) rather than
+        // clearing it silently, so a one-off hiccup can self-heal.
+        merchantToken = null;
+        merchantAuthCode = null;
+        merchantCodeVerifier = null;
+        guestSession = true;
+        if (ssoRetriesRemaining > 0) {
+          ssoRetriesRemaining -= 1;
+          ssoRetryAvailable = true;
+        }
       }
       confirmedIdentity = {
         authenticated: Boolean(identity.authenticated),
@@ -560,7 +594,8 @@
   /**
    * Attempt silent SSO into the merchant IDP once per page load. No-ops if
    * already attempted/in-flight, or if any required config field is missing
-   * (widget stays in guest mode).
+   * (widget stays in guest mode) — unless `ssoRetryAvailable` grants a single
+   * follow-up attempt after the backend reported our credential went stale.
    *
    * The resulting PKCE code+verifier are handed to the chat backend, not
    * exchanged here: the merchant IDP's token endpoint has no CORS headers
@@ -568,7 +603,9 @@
    * exchange itself server-to-server (see sendMessage/confirmAndPay).
    */
   function attemptSilentSso() {
-    if (hasMerchantCredential() || ssoInFlight || ssoAttempted) return;
+    if (hasMerchantCredential() || ssoInFlight) return;
+    if (ssoAttempted && !ssoRetryAvailable) return;
+    ssoRetryAvailable = false;
     if (!MERCHANT_ID || !MERCHANT_IDP_AUTHORIZE_URL || !MERCHANT_BRIDGE_CLIENT_ID || !SILENT_CALLBACK_URL) {
       ssoAttempted = true;
       ssoFallbackToGuest('silent SSO not configured for this merchant');
@@ -685,6 +722,12 @@
     text = String(text).trim();
     if (!text) return;
 
+    // Called synchronously within this click/keydown handler's call stack, so
+    // a granted retry can still open its popup without being treated as
+    // popup-blocked. No-op unless a prior response flagged our credential as
+    // dead (see cacheMerchantTokenFromResponse).
+    if (ssoRetryAvailable && !hasMerchantCredential()) attemptSilentSso();
+
     // Optimistically render and record the user's message.
     appendBubble('user', text);
     messageHistory.push({ role: 'user', content: text });
@@ -767,6 +810,10 @@
    * No checkout call is made without an explicit button click (FR 14 / human-in-the-loop).
    */
   function confirmAndPay() {
+    // Called synchronously within the button's click handler, so a granted
+    // retry can still open its popup without being treated as popup-blocked.
+    if (ssoRetryAvailable && !hasMerchantCredential()) attemptSilentSso();
+
     if (!pendingProposedPurchase || !hasMerchantCredential()) return;
 
     var purchase = pendingProposedPurchase;
@@ -794,7 +841,27 @@
       ),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error('Chat API returned ' + String(res.status));
+        if (!res.ok) {
+          return res
+            .json()
+            .catch(function () {
+              return null;
+            })
+            .then(function (data) {
+              if (data && data.trace) {
+                window.dispatchEvent(new CustomEvent('chatbot:trace', { detail: data.trace }));
+              }
+              // Applies the same dead-credential clear + one-shot retry as the
+              // success path below, even though this response is a 401.
+              if (data && data.identity) cacheMerchantTokenFromResponse(data);
+              if (res.status === 401 && data && data.error === 'login_required') {
+                var loginRequiredErr = new Error('login_required');
+                loginRequiredErr.loginRequired = true;
+                throw loginRequiredErr;
+              }
+              throw new Error('Chat API returned ' + String(res.status));
+            });
+        }
         return res.json();
       })
       .then(function (data) {
@@ -810,8 +877,13 @@
         messageHistory.push({ role: 'assistant', content: content });
         reenableInput();
       })
-      .catch(function () {
-        appendBubble('assistant', 'Payment could not be processed. Please try again.');
+      .catch(function (err) {
+        appendBubble(
+          'assistant',
+          err && err.loginRequired
+            ? 'Please sign in before confirming a purchase.'
+            : 'Payment could not be processed. Please try again.',
+        );
         reenableInput();
       });
   }
