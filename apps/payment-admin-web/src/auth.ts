@@ -10,6 +10,19 @@
 // `advancedOAuth2ClientConfig.tokenEndpointAuthMethod = "client_secret_post"`.
 // Auth.js v5 defaults to `client_secret_basic`, so we must explicitly override.
 //
+// `basePath: "/admin/api/auth"` — this app also sets Next.js's own
+// `basePath: '/admin'` (next.config.mjs), and Next.js strips that prefix
+// from every request before this route's handler ever runs, so Auth.js would
+// otherwise compute its own basePath as bare `/api/auth`. That breaks the
+// OAuth2 client registered on the AIC alpha realm, whose redirect URI is
+// `https://payments.mytestrun.com/admin/api/auth/callback/aic` (the full
+// external path — confirmed via a live read of the OAuth2Client config).
+// Setting it explicitly here makes Auth.js construct that same full path for
+// its outbound `redirect_uri`; the route handler in
+// `app/api/auth/[...nextauth]/route.ts` restores the stripped `/admin`
+// prefix on the way in so inbound action-parsing (signin/callback/etc.)
+// matches this same basePath.
+//
 // Environment variables (all required at runtime; see .env.example):
 //   PAYMENT_OIDC_ISSUER        — AIC alpha realm issuer URL
 //   PAYMENT_OIDC_CLIENT_ID     — OAuth2 client ID (payment-admin-web)
@@ -34,6 +47,7 @@ declare module "next-auth" {
 import NextAuth from "next-auth"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  basePath: "/admin/api/auth",
   providers: [
     {
       id: "aic",
