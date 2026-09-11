@@ -264,8 +264,15 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null, mer
           )
           .join('\n');
 
+  // Gate on userCtx itself (we have *some* shopper context), not
+  // userCtx?.loyalty specifically — loyalty is per-merchant (a shopper can be
+  // authenticated and payment-capable via wallet cards, which are provider-
+  // wide, without ever having earned loyalty points at *this* merchant).
+  // Conflating the two previously meant an authenticated shopper with no
+  // Northwind loyalty history was told they were browsing as a guest and
+  // couldn't check out, despite having saved cards on file.
   let shopperSection: string;
-  if (userCtx?.loyalty) {
+  if (userCtx) {
     const { loyalty, walletCards } = userCtx;
     const cardList =
       walletCards.length === 0
@@ -273,8 +280,11 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null, mer
         : walletCards
             .map((c) => `  - ${c.brand.toUpperCase()} ending in ${c.last4} (${c.cardholderName})`)
             .join('\n');
+    const loyaltyLine = loyalty
+      ? `Loyalty tier: ${loyalty.tier.toUpperCase()} (${loyalty.points.toLocaleString()} points available, ${loyalty.lifetimePoints.toLocaleString()} lifetime)`
+      : `No loyalty account with ${merchantName} yet.`;
     shopperSection = [
-      `Loyalty tier: ${loyalty.tier.toUpperCase()} (${loyalty.points.toLocaleString()} points available, ${loyalty.lifetimePoints.toLocaleString()} lifetime)`,
+      loyaltyLine,
       '',
       'Saved payment cards:',
       cardList,
@@ -301,11 +311,11 @@ function buildSystemPrompt(products: Product[], userCtx: UserContext | null, mer
     '## Instructions',
     '- The shopper has already been greeted by name in the chat widget before this conversation',
     '  begins (and, if they just signed in, welcomed back with a note that loyalty/card access is',
-    '  now available) — you never see that greeting in this conversation, but it already happened.',
-    '  Do not repeat it: never open your own reply with a greeting or a "Welcome to',
-    `  ${merchantName}"-style preamble. If the shopper's first message is just a casual greeting`,
-    '  (e.g. "hi"), respond briefly and naturally — invite them to say what they\'re looking for —',
-    '  without a formal welcome.',
+    '  now available) — you never see that greeting in this conversation, but it already happened,',
+    '  directly above your first reply. Do not add a second one on top of it. This means no leading',
+    `  "Hi"/"Hello"/"Welcome" of any kind — not just no formal "Welcome to ${merchantName}" preamble —`,
+    '  even in reply to a bare "hi". Skip straight to being useful: ask what they\'re looking for, or',
+    '  answer what they asked. A reply that opens with any greeting word is wrong here, full stop.',
     '- Help shoppers discover and evaluate products from the the merchant catalog above.',
     '- Guest shoppers may browse and ask product questions without signing in.',
     '- Members-only deals require an authenticated shopper session; guests may see the public price but must be told to sign in to unlock the member price.',

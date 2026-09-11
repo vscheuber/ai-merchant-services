@@ -239,5 +239,26 @@
       "source": "chatbot",
       "confirmedAt": "2026-09-11T04:57:37.673Z"
     }
+  },
+  {
+    "id": "txn_00012",
+    "userId": "23b4afba-6031-4bdc-aa3c-13c4394e160e",
+    "merchantId": "northwind",
+    "merchantName": "Northwind Retail",
+    "amount": 349,
+    "currency": "USD",
+    "status": "captured",
+    "createdAt": "2026-09-11T06:18:54.054Z",
+    "items": [
+      {
+        "sku": "NW-HP-STUDIO",
+        "quantity": 1,
+        "unitPrice": 349
+      }
+    ],
+    "consent": {
+      "source": "chatbot",
+      "confirmedAt": "2026-09-11T06:18:52.128Z"
+    }
   }
 ]

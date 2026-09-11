@@ -33,5 +33,12 @@
     "points": 1100,
     "lifetimePoints": 1307,
     "tier": "silver"
+  },
+  {
+    "userId": "23b4afba-6031-4bdc-aa3c-13c4394e160e",
+    "merchantId": "northwind",
+    "points": 349,
+    "lifetimePoints": 349,
+    "tier": "bronze"
   }
 ]
