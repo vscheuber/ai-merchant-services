@@ -1,7 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { signOut, useSession } from 'next-auth/react'
+import { signIn, signOut, useSession } from 'next-auth/react'
 import { CartHeaderAction } from './cart-header-action'
 
 function firstName(name: string | null | undefined): string {
@@ -39,12 +38,18 @@ export function ClientHeaderActions() {
           </div>
         </details>
       ) : status === 'unauthenticated' ? (
-        <Link
-          href="/api/auth/signin"
+        // A plain link to /api/auth/signin renders Auth.js's generic
+        // provider-picker page (one button per configured provider, even
+        // when there's only one) before actually redirecting to the IDP.
+        // Calling signIn() with the explicit provider id here skips that
+        // extra click and redirects straight to AIC's authorize endpoint.
+        <button
+          type="button"
           className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          onClick={() => void signIn('aic')}
         >
           Sign in
-        </Link>
+        </button>
       ) : null}
     </div>
   )

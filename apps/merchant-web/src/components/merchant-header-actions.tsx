@@ -1,5 +1,4 @@
-import Link from 'next/link'
-import { auth, signOut } from '../auth'
+import { auth, signIn, signOut } from '../auth'
 
 import { ChatbotLauncherBtn } from './chatbot-launcher-btn'
 import { CartHeaderAction } from './cart-header-action'
@@ -35,12 +34,24 @@ export async function MerchantHeaderActions() {
           </div>
         </details>
       ) : (
-        <Link
-          href="/api/auth/signin"
-          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+        // A plain link to /api/auth/signin renders Auth.js's generic
+        // provider-picker page (one button per configured provider, even
+        // when there's only one) before actually redirecting to the IDP.
+        // Calling signIn() with the explicit provider id here skips that
+        // extra click and redirects straight to AIC's authorize endpoint.
+        <form
+          action={async () => {
+            'use server'
+            await signIn('aic')
+          }}
         >
-          Sign in
-        </Link>
+          <button
+            type="submit"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Sign in
+          </button>
+        </form>
       )}
     </div>
   )

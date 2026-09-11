@@ -32,9 +32,13 @@ export default async function CheckoutPage() {
   // Checkout is account-backed; require an active merchant access token.
   // Using the same accessToken guard as the proxy route ensures the page only
   // renders when a valid Bearer token is available for the wallet fetch and
-  // subsequent form submission.
+  // subsequent form submission. Routes through /login (a Route Handler —
+  // signIn() needs to set cookies, which Next.js only allows there or in a
+  // Server Action, not here) rather than redirect('/api/auth/signin?...'),
+  // which would show Auth.js's generic provider-picker page first (see
+  // client-header-actions.tsx).
   if (!session?.accessToken) {
-    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/checkout'))
+    redirect('/login?redirectTo=' + encodeURIComponent('/checkout'))
   }
 
   const userId = session.userId ?? ''

@@ -7,8 +7,8 @@
 // exchange or the payment-api call fails the page renders with graceful
 // "unavailable" fallbacks rather than crashing.
 //
-// The OIDC subject identifier (session.userId — the AIC merchant_user _id, e.g.
-// "user_ada") is used as the payment-api userId parameter.
+// The OIDC subject identifier (session.userId — the AIC merchant_user _id, a
+// UUID) is used as the payment-api userId parameter.
 //
 // Next.js App Router requires a default export.
 
@@ -41,8 +41,12 @@ export default async function AccountPage() {
   const merchantConfig = await loadMerchantConfig()
 
   // Account data is private: require an authenticated merchant session.
+  // Routes through /login (a Route Handler — signIn() needs to set cookies,
+  // which Next.js only allows there or in a Server Action, not here) rather
+  // than redirect('/api/auth/signin?...'), which would show Auth.js's generic
+  // provider-picker page first (see client-header-actions.tsx).
   if (!session?.accessToken) {
-    redirect('/api/auth/signin?callbackUrl=' + encodeURIComponent('/account'))
+    redirect('/login?redirectTo=' + encodeURIComponent('/account'))
   }
 
   const userName = session.user?.name ?? '—'
