@@ -372,7 +372,10 @@ async function createPaymentUser(
     givenName,
     sn,
     mail: email,
-    accountStatus: 'active',
+    // The alpha_user schema's accountStatus property enforces a
+    // case-sensitive VALID_ENUM_VALUE policy ("Active"/"Inactive") — a
+    // lowercase 'active' is rejected with 403 Forbidden at create time.
+    accountStatus: 'Active',
     [attributes.merchantIdAttribute]: merchantId,
     [attributes.merchantCustomerIdAttribute]: merchantCustomerId,
   };

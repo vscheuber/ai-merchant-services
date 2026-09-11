@@ -28,9 +28,10 @@ declare module "next-auth" {
     accessToken?: string
     /**
      * OIDC subject identifier from the merchant identity-provider JWT.
-     * In this project the AIC merchant-provider user `_id` is set to the data-layer userId
-     * (e.g. "user_ada"), so this value can be used directly as the `userId`
-     * query parameter in payment-api calls.
+     * In this project the AIC merchant-provider user `_id` (a UUID) is set to
+     * match the data-layer userId in data/*.json for the seeded demo users,
+     * so this value can be used directly as the `userId` query parameter in
+     * payment-api calls.
      */
     userId?: string
     /** Epoch milliseconds when the merchant access token expires. */
@@ -210,8 +211,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Expose the OIDC sub as session.userId for payment-api calls.
       // Auth.js v5 JWT sessions do NOT set session.user.id automatically
       // (only the database strategy does); we must propagate token.sub here.
-      // token.sub is the merchant realm user's _id — provisioned as "user_ada"
-      // etc. — so it matches the userId keys in data/*.json.
+      // token.sub is the merchant realm (bravo) user's _id (a UUID) — the
+      // seeded demo users' data/*.json records use that same UUID as their
+      // id, so this value matches the userId keys there directly.
       ;(session as Session).userId = token.sub
       ;(session as Session).firstName =
         (token["firstName"] as string | undefined) ?? getFirstName(session.user?.name)
