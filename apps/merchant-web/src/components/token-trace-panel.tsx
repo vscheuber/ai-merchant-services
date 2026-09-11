@@ -5,6 +5,29 @@ import type { TokenTrace } from '@acme/shared';
 
 const STORAGE_KEY = 'merchant-demo-token-trace';
 const TRACE_SESSION_KEY = 'merchant-demo-token-trace-session';
+const MINIMIZED_KEY = 'merchant-demo-token-trace-minimized';
+const CORNER_KEY = 'merchant-demo-token-trace-corner';
+
+/**
+ * The panel is fixed-positioned and can otherwise sit on top of page content
+ * (e.g. the checkout "Pay" button) with no way to move it. Cycling through
+ * the four corners is far simpler and more robust than free dragging (no
+ * pointer-capture edge cases, no risk of ending up off-screen) while still
+ * solving the actual problem — getting it out of the way of whatever it's
+ * currently covering.
+ */
+const CORNERS = ['bottom-left', 'bottom-right', 'top-right', 'top-left'] as const;
+type Corner = (typeof CORNERS)[number];
+const CORNER_POSITION_CLASSES: Record<Corner, string> = {
+  'bottom-left': 'bottom-4 left-4',
+  'bottom-right': 'bottom-4 right-4',
+  'top-right': 'top-4 right-4',
+  'top-left': 'top-4 left-4',
+};
+
+function isCorner(value: string | null): value is Corner {
+  return CORNERS.includes(value as Corner);
+}
 
 function redactToken(token: string): string {
   if (token.length < 24) return '[redacted]';
@@ -40,6 +63,8 @@ export function TokenTracePanel() {
   const [enabled, setEnabled] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [trace, setTrace] = useState<TokenTrace | null>(null);
+  const [minimized, setMinimized] = useState(false);
+  const [corner, setCorner] = useState<Corner>('bottom-left');
   const sessionIdRef = useRef<string>('');
   const generationRef = useRef(0);
   const latestRevisionRef = useRef(0);
@@ -48,8 +73,12 @@ export function TokenTracePanel() {
     sessionIdRef.current = getTraceSessionId();
     const initialEnabled = window.sessionStorage.getItem(STORAGE_KEY) === 'on';
     const initialRaw = window.sessionStorage.getItem('merchant-demo-token-trace-raw') === 'on';
+    const initialMinimized = window.sessionStorage.getItem(MINIMIZED_KEY) === 'on';
+    const storedCorner = window.sessionStorage.getItem(CORNER_KEY);
     setEnabled(initialEnabled);
     setShowRaw(initialRaw);
+    setMinimized(initialMinimized);
+    if (isCorner(storedCorner)) setCorner(storedCorner);
     const acceptTrace = (detail: TokenTrace | null) => {
       if (!detail || detail.traceSessionId !== sessionIdRef.current) return;
       if ((detail.revision ?? 0) < latestRevisionRef.current) return;
@@ -136,8 +165,24 @@ export function TokenTracePanel() {
     if (!next) void clearTrace();
   }
 
+  /** Collapses/expands the panel body only — enabled state and trace data are untouched. */
+  function toggleMinimized() {
+    const next = !minimized;
+    setMinimized(next);
+    window.sessionStorage.setItem(MINIMIZED_KEY, next ? 'on' : 'off');
+  }
+
+  /** Cycles the panel to the next corner so it can be moved off whatever it's covering. */
+  function cycleCorner() {
+    const next = CORNERS[(CORNERS.indexOf(corner) + 1) % CORNERS.length]!;
+    setCorner(next);
+    window.sessionStorage.setItem(CORNER_KEY, next);
+  }
+
   return (
-    <aside className="fixed bottom-4 left-4 z-[2147483001] w-[min(440px,calc(100vw-2rem))] rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 shadow-xl dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
+    <aside
+      className={`fixed ${CORNER_POSITION_CLASSES[corner]} z-[2147483001] w-[min(440px,calc(100vw-2rem))] rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 shadow-xl dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50`}
+    >
       <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 font-semibold">
           <input
@@ -147,8 +192,22 @@ export function TokenTracePanel() {
           />
           Demo token tracing
         </label>
-        {enabled ? (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="underline"
+            title="Move to the next corner"
+            onClick={cycleCorner}
+          >
+            Move
+          </button>
+          {enabled ? (
+            <button type="button" className="underline" onClick={toggleMinimized}>
+              {minimized ? 'Expand' : 'Minimize'}
+            </button>
+          ) : null}
+          {enabled && !minimized ? (
+            <>
             {trace ? (
               <button
                 type="button"
@@ -181,13 +240,16 @@ export function TokenTracePanel() {
             <button type="button" className="underline" onClick={() => void clearTrace()}>
               Clear
             </button>
-          </div>
-        ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
-      <p className="mt-1 opacity-80">
-        Diagnostic mode is scoped to this browser tab and should not be enabled for real users.
-      </p>
-      {enabled ? (
+      {!minimized ? (
+        <p className="mt-1 opacity-80">
+          Diagnostic mode is scoped to this browser tab and should not be enabled for real users.
+        </p>
+      ) : null}
+      {enabled && !minimized ? (
         <>
           <label className="mt-2 flex items-center gap-2">
             <input
