@@ -1,6 +1,6 @@
 [
   {
-    "userId": "user_ada",
+    "userId": "1bc8524d-9494-4c0d-b361-fa4151cf3234",
     "merchantId": "northwind",
     "points": 2500,
     "lifetimePoints": 3626,
@@ -9,26 +9,26 @@
   {
     "userId": "a22944a9-dac7-4618-84d3-abaaa11a970c",
     "merchantId": "northwind",
-    "points": 2500,
-    "lifetimePoints": 3626,
+    "points": 2579,
+    "lifetimePoints": 3705,
     "tier": "gold"
   },
   {
-    "userId": "user_ada",
+    "userId": "1bc8524d-9494-4c0d-b361-fa4151cf3234",
     "merchantId": "contoso",
     "points": 120,
     "lifetimePoints": 120,
     "tier": "bronze"
   },
   {
-    "userId": "user_grace",
+    "userId": "6462a26d-5718-4f69-8814-7b6f5027f523",
     "merchantId": "northwind",
-    "points": 500,
-    "lifetimePoints": 888,
+    "points": 1149,
+    "lifetimePoints": 1537,
     "tier": "silver"
   },
   {
-    "userId": "user_alan",
+    "userId": "23b4afba-6031-4bdc-aa3c-13c4394e160e",
     "merchantId": "contoso",
     "points": 1100,
     "lifetimePoints": 1307,

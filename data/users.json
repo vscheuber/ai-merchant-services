@@ -1,6 +1,6 @@
 [
   {
-    "id": "user_ada",
+    "id": "1bc8524d-9494-4c0d-b361-fa4151cf3234",
     "userName": "ada.lovelace",
     "email": "ada.lovelace@northwind.local",
     "givenName": "Ada",
@@ -8,7 +8,7 @@
     "merchantId": "northwind"
   },
   {
-    "id": "user_grace",
+    "id": "6462a26d-5718-4f69-8814-7b6f5027f523",
     "userName": "grace.hopper",
     "email": "grace.hopper@northwind.local",
     "givenName": "Grace",
@@ -16,7 +16,7 @@
     "merchantId": "northwind"
   },
   {
-    "id": "user_alan",
+    "id": "23b4afba-6031-4bdc-aa3c-13c4394e160e",
     "userName": "alan.turing",
     "email": "alan.turing@contoso.local",
     "givenName": "Alan",

@@ -1,7 +1,7 @@
 [
   {
     "id": "card_ada_001",
-    "userId": "user_ada",
+    "userId": "1bc8524d-9494-4c0d-b361-fa4151cf3234",
     "brand": "visa",
     "last4": "4242",
     "expiryMonth": 5,
@@ -10,7 +10,7 @@
   },
   {
     "id": "card_ada_002",
-    "userId": "user_ada",
+    "userId": "1bc8524d-9494-4c0d-b361-fa4151cf3234",
     "brand": "mastercard",
     "last4": "5454",
     "expiryMonth": 11,
@@ -19,7 +19,7 @@
   },
   {
     "id": "card_ada_003",
-    "userId": "user_ada",
+    "userId": "1bc8524d-9494-4c0d-b361-fa4151cf3234",
     "brand": "amex",
     "last4": "0005",
     "expiryMonth": 3,
@@ -55,7 +55,7 @@
   },
   {
     "id": "card_grace_001",
-    "userId": "user_grace",
+    "userId": "6462a26d-5718-4f69-8814-7b6f5027f523",
     "brand": "visa",
     "last4": "1881",
     "expiryMonth": 7,
@@ -64,7 +64,7 @@
   },
   {
     "id": "card_grace_002",
-    "userId": "user_grace",
+    "userId": "6462a26d-5718-4f69-8814-7b6f5027f523",
     "brand": "mastercard",
     "last4": "9944",
     "expiryMonth": 9,
@@ -73,7 +73,7 @@
   },
   {
     "id": "card_alan_001",
-    "userId": "user_alan",
+    "userId": "23b4afba-6031-4bdc-aa3c-13c4394e160e",
     "brand": "visa",
     "last4": "3312",
     "expiryMonth": 1,
@@ -82,7 +82,7 @@
   },
   {
     "id": "card_alan_002",
-    "userId": "user_alan",
+    "userId": "23b4afba-6031-4bdc-aa3c-13c4394e160e",
     "brand": "amex",
     "last4": "8431",
     "expiryMonth": 4,
