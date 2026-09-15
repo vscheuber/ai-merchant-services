@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Identity Bridge Sequence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  body { background: #f6f7fa; font-family: ui-sans-serif, system-ui, sans-serif; padding: 24px; }
+  h1 { font-size: 20px; color: #12182a; margin-bottom: 4px; }
+  p.note { color: #4b5566; font-size: 14px; margin-top: 0; margin-bottom: 24px; max-width: 120ch; }
+  .mermaid { background: #ffffff; border: 1px solid #c9d2e0; border-radius: 10px; padding: 24px; overflow-x: auto; }
+</style>
+</head>
+<body>
+  <h1>Identity Bridge — End-to-End Sequence</h1>
+  <p class="note">Anonymous browsing &rarr; merchant login &rarr; silent SSO &rarr; JIT provisioning &rarr; scoped token exchange &rarr; shopper context &rarr; checkout. The merchant embeds the chatbot with a single &lt;script&gt; tag on its storefront pages; the widget then bridges into the payment provider on its own.</p>
+  <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as Shopper (Browser)
+    box rgb(244,228,206) Merchant
+        participant S as Merchant Storefront
+        participant MIDP as Merchant IDP
+        participant MAPI as Merchant API<br/>(loyalty + wallet)
+    end
+    box rgb(217,238,239) Payment Provider
+        participant W as Chatbot Widget
+        participant B as Chatbot BFF
+        participant PIDP as Payment Provider IDP
+        participant PAPI as Payment API<br/>(checkout, ledger)
+    end
+
+    Note over W,B: Chatbot
+
+    rect rgb(250,245,235)
+    Note over U,S: Phase 1 — anonymous browsing
+    U->>S: GET / (anonymous)
+    S->>U: storefront page + embedded chat widget script
+    end
+
+    rect rgb(250,245,235)
+    Note over U,MIDP: Phase 2 — shopper authenticates to the merchant
+    U->>MIDP: log in (credentials)
+    MIDP->>U: merchant session cookie
+    U->>S: browses, now signed in
+    end
+
+    rect rgb(238,235,252)
+    Note over W,MIDP: Phase 3 — silent SSO (invisible to the shopper)
+    W->>W: generate PKCE code_verifier + code_challenge
+    W->>MIDP: invisible popup — GET /authorize?prompt=none&code_challenge=...
+    MIDP->>MIDP: existing merchant session found — no login screen shown
+    MIDP->>W: one-time authorization code (via postMessage)
+    end
+
+    rect rgb(238,235,252)
+    Note over W,B: Phase 4 — code handed to the backend,<br/>never to the payment provider directly
+    W->>B: { authCode, codeVerifier }
+    B->>MIDP: POST /token (server-to-server: code + verifier)
+    MIDP->>B: merchant identity token
+    end
+
+    rect rgb(220,238,239)
+    Note over B,PIDP: Phase 5 — JIT provisioning + scoped token exchange
+    B->>PIDP: authenticate merchant token (merchant-token-login journey)
+    PIDP->>PIDP: JIT lookup-or-create identity,<br/>bound via merchant-id + customer-id pair
+    PIDP->>B: payment-provider session token
+    B->>PIDP: exchange for a scoped agent token (RFC 8693)
+    PIDP->>B: short-lived agent token
+    end
+
+    Note over W,B: The browser only ever caches the merchant token<br/>for reuse. The agent token never leaves the BFF.
+
+    rect rgb(250,245,235)
+    Note over B,MAPI: Phase 6 — chatbot reads shopper context from the merchant
+    B->>MAPI: GET loyalty + saved-card references (merchant token)
+    MAPI->>B: loyalty balance + tokenized card references
+    end
+
+    U->>W: "looking for wireless headphones"
+    W->>B: POST /api/chat
+    B->>W: recommendation + proposed purchase
+    W->>U: shows "Confirm & pay"
+
+    U->>W: clicks Confirm & pay
+    W->>B: confirmedAt + proposedPurchase
+
+    rect rgb(250,245,235)
+    Note over B,MAPI: 🚧 not yet implemented
+    B->>MAPI: fetch selected card reference
+    MAPI->>B: tokenized card reference (no raw PAN)
+    end
+
+    Note over B,PAPI: Open question — the token/reference format the payment<br/>provider needs to charge a merchant-held card isn't designed yet
+
+    rect rgb(217,238,239)
+    Note over B,PAPI: Payment provider still settles the charge
+    B->>PAPI: POST /checkout (cart, card reference, agent token)
+    PAPI->>PAPI: authoritative pricing, charge, ledger write
+    PAPI->>B: captured / declined
+    end
+
+    B->>W: "Payment captured!"
+    W->>U: confirmation shown
+  </pre>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: { primaryColor: '#e7e3fb', primaryBorderColor: '#5b4fe0', primaryTextColor: '#12182a', lineColor: '#4b5566', actorTextColor: '#12182a', signalTextColor: '#12182a', noteBkgColor: '#fff8e6', noteBorderColor: '#c9d2e0' } });
+</script>
+</body>
+</html>
